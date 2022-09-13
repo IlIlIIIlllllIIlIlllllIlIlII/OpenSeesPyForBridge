@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"name": "XXX",
+			"path": ".."
+		}
+	],
+	"settings": {
+		"python.defaultInterpreterPath": "D:\\Users\\Asong\\anaconda3\\envs\\Ops\\python.exe",
+		"python.terminal.activateEnvironment": true,
+		"workbench.iconTheme": "vscode-icons",
+		"python.analysis.extraPaths": [
+			"D:\\Users\\Asong\\anaconda3\\envs\\Ops\\Lib\\site-packages\\openseespywin"
+		],
+		"python.languageServer": "Pylance",
+		"vim.hlsearch": true,
+		"vim.useCtrlKeys": true,
+		"vim.useSystemClipboard": true,
+		"editor.lineHeight": 30
+	}
+}
