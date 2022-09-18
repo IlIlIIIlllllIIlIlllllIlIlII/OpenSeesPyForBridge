@@ -16,11 +16,11 @@ class Component(metaclass=ABCMeta):
         else:
             return False
 
-    def __str__(self):
-        dic = ""
-        for name, val in vars(self).items():
-           dic += "{}:{}\n".format(name, val)
-        return dic
+    # def __repr__(self):
+    #     dic = ""
+    #     for name, val in vars(self).items():
+    #        dic += "{}:{}\n".format(name, val)
+    #     return dic
 
     @property
     def val(self):

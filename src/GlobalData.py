@@ -86,8 +86,8 @@ class MaterialDataBase:
 
     # * fy, e0, b, *params, a1=a2*fy/e0, a2=1.0, a3=a4*fy/e0, a4=1.0, siginit=0.0
         return {
-            "HPB300": {"fy": 100000, "e0": 1000, "b": 0.01, "r0": 15, "r1": 0.925, "r2": 0.15},
-            "HRB400": {"fy": 100000, "e0": 1000, "b": 0.02, "r0": 15, "r1": 0.925, "r2": 0.15},
+            "HPB300": {"fy": 100000, "E0": 1000, "b": 0.01, "R0": 15, "R1": 0.925, "R2": 0.15},
+            "HRB400": {"fy": 100000, "E0": 1000, "b": 0.02, "R0": 15, "R1": 0.925, "R2": 0.15},
         }
     
     @classmethod
@@ -99,7 +99,7 @@ class MaterialDataBase:
                 "epsc0": 1000,
                 "fpcu": 1000,
                 "epsu": 1000,
-                "lambda": 10000,
+                "Lambda": 10000,
                 "ft": 10000,
                 "ets": 1000,
                 "dens": 1000,
@@ -109,7 +109,7 @@ class MaterialDataBase:
                 "epsc0": 1000,
                 "fpcu": 1000,
                 "epsu": 1000,
-                "lambda": 10000,
+                "Lambda": 10000,
                 "ft": 10000,
                 "ets": 1000,
                 "dens": 1000,
@@ -119,7 +119,7 @@ class MaterialDataBase:
                 "epsc0": 1000,
                 "fpcu": 1000,
                 "epsu": 1000,
-                "lambda": 10000,
+                "Lambda": 10000,
                 "ft": 10000,
                 "ets": 1000,
                 "dens": 1000,
@@ -129,7 +129,7 @@ class MaterialDataBase:
                 "epsc0": 1000,
                 "fpcu": 1000,
                 "epsu": 1000,
-                "lambda": 10000,
+                "Lambda": 10000,
                 "ft": 10000,
                 "ets": 1000,
                 "dens": 1000,
@@ -139,7 +139,7 @@ class MaterialDataBase:
                 "epsc0": 1000,
                 "fpcu": 1000,
                 "epsu": 1000,
-                "lambda": 10000,
+                "Lambda": 10000,
                 "ft": 10000,
                 "ets": 1000,
                 "dens": 1000,
@@ -149,7 +149,7 @@ class MaterialDataBase:
                 "epsc0": 1000,
                 "fpcu": 1000,
                 "epsu": 1000,
-                "lambda": 10000,
+                "Lambda": 10000,
                 "ft": 10000,
                 "ets": 1000,
                 "dens": 1000,

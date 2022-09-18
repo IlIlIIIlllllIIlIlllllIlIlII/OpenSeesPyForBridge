@@ -229,7 +229,7 @@ class HRectSectParas(SectParas):
     @property
     def T(self):
         return self._thick
-    @L.setter
+    @T.setter
     def T(self, newVal):
         if type(newVal) is int or type(newVal) is float:
             self._thick = newVal
@@ -265,7 +265,7 @@ class MaterialParas(Paras, metaclass=ABCMeta):
 class ConcreteParas(MaterialParas):
     # uniaxialMaterial('Concrete02', matTag, fpc, epsc0, fpcu, epsU, lambda, ft, Ets)
     __slots__ = ['_type', '_uniqNum', '_name', "_fpc", "_epsc0", "_fpcu", "_epsu", "_lambda", 
-                "_ft", "_ets"]
+                "_ft", "_ets", "_dens"]
     def __init__(
         self,
         conType: str,
@@ -276,6 +276,7 @@ class ConcreteParas(MaterialParas):
         Lambda: float,
         ft: float,
         ets: float,
+        dens:float,
         flag_Core=False,
         name: str = "",
     ):
@@ -288,6 +289,7 @@ class ConcreteParas(MaterialParas):
         self._lambda = Lambda
         self._ft = ft
         self._ets = ets
+        self._dens = dens
 
     @property
     def ConType(self):
@@ -386,6 +388,11 @@ class ConcreteParas(MaterialParas):
         """
         return [self._fpc, self._epsc0, self._fpcu, self._epsu, self._lambda, self._ft, self._ets]
 
+    def __repr__(self):
+        a = ","
+        b = [str(i) for i in self.val]
+        return a.join(b)
+
 class SteelParas(MaterialParas):
     __slots__ = ['_type', '_uniqNum', '_name', "_fy", "_E0", "_b", "_R0", "_R1", "_R2"]
 
@@ -464,17 +471,47 @@ class SteelParas(MaterialParas):
         """
         return [self._fy, self._E0, self._b, self._R0, self._R1, self._R2]
 
-class Concrete(Enum):
-    C30 = ConcreteParas(*GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C30.value])  
-    C35 = ConcreteParas(*GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C35.value])
-    C40 = ConcreteParas(*GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C40.value])  
-    C45 = ConcreteParas(*GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C45.value])   
-    C50 = ConcreteParas(*GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C50.value])  
-    C55 = ConcreteParas(*GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C55.value])  
+class Concrete:
+    @classmethod
+    @property
+    def C30(cls):
+        return ConcreteParas("C30", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C30.value])
 
-class ReBar(Enum):
-    HPB300 = SteelParas(*GlobalData.MaterialDataBase.Rebar[GlobalData.ReBarType.HPB300.value])
-    HRB400 = SteelParas(*GlobalData.MaterialDataBase.Rebar[GlobalData.ReBarType.HRB400.value])
+    @classmethod
+    @property
+    def C35(cls):
+        return ConcreteParas("C35", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C35.value])
+
+    @classmethod
+    @property
+    def C40(cls):
+        return ConcreteParas("C40", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C40.value])
+
+    @classmethod
+    @property
+    def C45(cls):
+        return ConcreteParas("C45", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C45.value])
+
+    @classmethod
+    @property
+    def C50(cls):
+        return ConcreteParas("C50", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C50.value])
+
+    @classmethod
+    @property
+    def C55(cls):
+        return ConcreteParas("C55", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C55.value])
+
+class ReBar:
+    @classmethod
+    @property
+    def HPB300(cls):
+        return SteelParas(rebarType="HPB300", **GlobalData.MaterialDataBase.Rebar[GlobalData.ReBarType.HPB300.value])
+
+    @classmethod
+    @property
+    def HRB400(cls):
+        return SteelParas(rebarType="HRB400", **GlobalData.MaterialDataBase.Rebar[GlobalData.ReBarType.HRB400 .value])
 
 #TODO
 class BridgeParas(Paras):

@@ -298,10 +298,10 @@ class BarsTools:
 
     @staticmethod
     def TryFunc(l_line:list[float], sectArea: float, r: float, decOrder:list[int], decFun):
-        if Util.iterLen(decOrder) != len(l_line):
+        if Util.iter_Len(decOrder) != len(l_line):
             raise Exception("Wrong Paras")
 
-        Ns_max = BarsTools.calcBarsNum(l_line)
+        Ns_max = BarsTools.calcBarsNum(l_line, len(l_line)*[DEFVAL._REBAR_D_DEF])
         As_max = ReBarArea.getMaxItem()
         Rat_max = BarsTools.calcBarsArea([Ns_max], [[As_max] * len(Ns_max)]) / sectArea
 
@@ -310,7 +310,6 @@ class BarsTools:
             As_ = [[As_max] * len(Ns_max)]
             Rat_ = [Rat_max]
 
-            # * TBC
             l_line = decFun(l_line)
 
             rat, Ns, As = BarsTools.TryFunc(
@@ -335,7 +334,7 @@ class BarsTools:
             count = 0
             Ns_try = Ns_max.copy()
             
-            while Util.TOLLT(BarsTools.calcBarsArea(Ns_try, [[As_min] * len(Ns_try)])/sectArea, r) \
+            while Util.TOLLT(BarsTools.calcBarsArea([Ns_try], [[As_min] * len(Ns_try)])/sectArea, r) \
                 and not Util.isOnlyHas(Ns_try, [1]):
 
                 for i in order[count]:
@@ -345,7 +344,7 @@ class BarsTools:
                         Ns_try[i] -= 1
 
                 count += 1
-                count = count % len(Ns)
+                count = count % len(order)
                 Ns_Lower = []
                 Ns_Upper = []
 
@@ -360,9 +359,8 @@ class BarsTools:
             # ---------(Ns_Lower, As_min)----(||Ns_Upper, As_min||)----r--(||Ns_Upper, As_min||)---(Ns_max, As_max)----->
             f = BarsTools.RebarsCombineGenator(order, ReBarArea.listAllItem())
 
-            r_upper = 0
             r_lower = 0
-            r_res = BarsTools.calcBarsArea([Ns_Upper])
+            r_res = BarsTools.calcBarsArea([Ns_Upper], [[As_max]*len(Ns_Upper)])
             Ns_res = None
             As_res = None
 
@@ -371,12 +369,12 @@ class BarsTools:
                 try:
                     As_ = next(f)
                     r_lower = BarsTools.calcBarsArea([Ns_Lower], [As_]) / sectArea
-                    if (r_lower - r) > 0 and (r_res -r) > 0:
+                    if (r_lower - r) > 0 and (r_res - r) > 0:
                         r_res = r_lower
                         Ns_res = Ns_Lower
-                        As_res  = As_
+                        As_res = As_
                     elif (r_lower - r) * (r_res - r) < 0:
-                        if Util.TOLLT(abs(r_lower - r), (r_res - r)):
+                        if Util.TOLLT(abs(r_lower - r), abs(r_res - r)):
                             r_res = r_lower
                             Ns_res = Ns_Lower
                             As_res = As_
@@ -389,9 +387,9 @@ class BarsTools:
                 return (r_res, Ns_res, As_res)
 
     @staticmethod
-    def RebarsCombineGenator(decOrder, barArea:list):
+    def RebarsCombineGenator(decOrder, barAreaRange:list):
         num = len(decOrder)
-        f = Util.FullPertmuation(barArea, num)
+        f = Util.FullPertmuation(barAreaRange, num)
         res = [0] * Util.iter_Len(decOrder)
         while True:
             try:
@@ -433,9 +431,9 @@ class BarsTools:
         #                 |l_l1
         if r - 0.006 < DEFVAL._TOL_ or r - 0.04 > DEFVAL._TOL_:
             raise Exception("Wrong Re-Bar Ratio")
-        w = Paras.width - Paras.cover * 2
-        l = Paras.length - Paras.cover * 2
-        t = Paras.thick - Paras.cover * 2
+        w = Paras.W - Paras.C * 2
+        l = Paras.L - Paras.C * 2
+        t = Paras.T - Paras.C * 2
 
         l_line = [w, l] * 2 + [w-2*t, l-2*t] * 2
         decOrder = [(5, 7), (4, 6), (1, 3), (0, 2)]
@@ -448,6 +446,9 @@ class BarsTools:
             
             for l in l_line[4:]:
                 l = l+2*DEFVAL._REBAR_D_DEF
+                new_line.append(l)
+
+            return new_line
 
 
         area = attr["area"]
