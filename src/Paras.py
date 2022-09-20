@@ -151,8 +151,36 @@ class SectRebarDistrParas(Paras):
         return [self.r, self.Ns, self.barArea]
         """
         return [self._r, self._Ns, self._barArea]
+class SRoundSectParas(SectParas):
+    def __init__(self, R:float, cover:float = GlobalData.DEFVAL._COVER_DEF, name=""):
+        super().__init__(name)
+        self._type += "->SRoundSectParas"
+        self._R = R
+        self._C = cover
 
+    @property
+    def R(self):
+        return self._R
+    @R.setter
+    def R(self, newVal):
+        if type(newVal) is type(self._R):
+            self._R = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    @property
+    def C(self):
+        return self._C
+    @C.setter
+    def C(self, newVal):
+        if type(newVal) is type(self._C):
+            self._C = newVal
+        else:
+            raise Exception("Wrong Paras")
 
+    def val(self):
+        return [self._R, self._C]
+    
 
 class HRoundSectParas(SectParas):
     __slots__ = ["_R", "_Thick", "_Cover"]
@@ -164,14 +192,19 @@ class HRoundSectParas(SectParas):
         self._C = c
 
     @property
-    def R(self):
+    def Rout(self):
         return self._R
-    @R.setter
-    def R(self, newVal):
+    @Rout.setter
+    def Rout(self, newVal):
         if type(newVal) is type(self._R):
             self._R = newVal
         else:
             raise Exception("Wrong Paras")
+
+    @property
+    def Rin(self):
+        return self._R - self._T
+
     @property
     def T(self):
         return self._T

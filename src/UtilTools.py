@@ -1,8 +1,10 @@
 #%%
 import numpy as np
+
 from .Comp import Paras
 from .GlobalData import DEFVAL, ReBarArea, ReBarType
-from .Paras import HRectSectParas, HRoundSectParas
+from .Paras import HRectSectParas, HRoundSectParas, SRoundSectParas
+from src import GlobalData
 #%%
 class SectTools:
     @staticmethod
@@ -178,7 +180,6 @@ class Util:
         return len(n)
 
     def FullPertmuation(barArea, num):
-        count = 0
         
         if num == 1:
             for a in barArea:
@@ -187,15 +188,11 @@ class Util:
         if num > 1:
             num -= 1
             
-            f = Util.FullPertmuation(barArea, num)
-            while True:
-                i = [barArea[count]]
-                try:
-                    j = next(f)
-                    yield i+j
-                except:
-                    count += 1
-                    f = Util.FullPertmuation(barArea, num)
+            for i in barArea:
+                f = Util.FullPertmuation(barArea, num)
+                for j in f:
+                    yield [i] + j
+
     
 class SegmentTools:
 
@@ -333,20 +330,17 @@ class BarsTools:
             order = decOrder
             count = 0
             Ns_try = Ns_max.copy()
-            
-            while Util.TOLLT(BarsTools.calcBarsArea([Ns_try], [[As_min] * len(Ns_try)])/sectArea, r) \
+
+            while Util.TOLGT(BarsTools.calcBarsArea([Ns_try], [[As_min] * len(Ns_try)])/sectArea, r) \
                 and not Util.isOnlyHas(Ns_try, [1]):
 
-                for i in order[count]:
-                    if Ns_try[i] == 1:
-                        continue
-                    else:
-                        Ns_try[i] -= 1
+                BarsTools.NsChangeByOrder(Ns_try, order, count, lambda x:x-1)
 
                 count += 1
                 count = count % len(order)
-                Ns_Lower = []
-                Ns_Upper = []
+
+            Ns_Lower = []
+            Ns_Upper = []
 
             if Ns_try == Ns_max:
                 Ns_Upper = Ns_try
@@ -354,21 +348,22 @@ class BarsTools:
             else:
                 Ns_Lower = Ns_try
                 Ns_Upper = Ns_try.copy()
-                for i in order[count]:
-                    Ns_Upper[i] += 1
+
+                BarsTools.NsChangeByOrder(Ns_Upper, order, count, lambda x: x+1)
             # ---------(Ns_Lower, As_min)----(||Ns_Upper, As_min||)----r--(||Ns_Upper, As_min||)---(Ns_max, As_max)----->
             f = BarsTools.RebarsCombineGenator(order, ReBarArea.listAllItem())
 
             r_lower = 0
-            r_res = BarsTools.calcBarsArea([Ns_Upper], [[As_max]*len(Ns_Upper)])
-            Ns_res = None
-            As_res = None
+            r_res = BarsTools.calcBarsArea([Ns_Upper], [[As_min]*len(Ns_Upper)]) / sectArea
 
+            Ns_res = Ns_Upper
+            As_res = As_min
 
             while True:
                 try:
                     As_ = next(f)
                     r_lower = BarsTools.calcBarsArea([Ns_Lower], [As_]) / sectArea
+
                     if (r_lower - r) > 0 and (r_res - r) > 0:
                         r_res = r_lower
                         Ns_res = Ns_Lower
@@ -382,28 +377,34 @@ class BarsTools:
                         break
 
                 except:
+                    print("Warring: Wrong Paras")
                     break
 
-                return (r_res, Ns_res, As_res)
+            return ([r_res], [Ns_res], [As_res])
 
     @staticmethod
     def RebarsCombineGenator(decOrder, barAreaRange:list):
         num = len(decOrder)
         f = Util.FullPertmuation(barAreaRange, num)
         res = [0] * Util.iter_Len(decOrder)
-        while True:
-            try:
-                As_ = next(f)
-                if len(As_) != len(decOrder):
-                    raise Exception("the length of AS and decOrder is not equal")
+        for As_ in f:
+            if len(As_) != len(decOrder):
+                raise Exception("the length of AS and decOrder is not equal")
 
-                for As, ords in zip(As_, decOrder):
-                    for i in ords:
-                        res[i] = As
+            for As, ords in zip(As_, decOrder):
+                if type(ords) is list or type(ords) is tuple:
+                    for ord in ords:
+                        res[ord] = As
 
-                yield res
-            except:
-                raise Exception("can not produce more Rebars Area Combine")
+                elif type(ords) is int:
+                    res[ords] = As
+
+                else:
+                    raise Exception("Wrong Params")
+
+            yield res
+        
+            
 
     # * 计算钢筋分布
     @staticmethod
@@ -458,7 +459,25 @@ class BarsTools:
         return r, Res[1], Res[2]
 
     @staticmethod
-    def HRoundRebarDistr(Paras:HRoundSectParas, attr:dict, r: float) -> tuple[float, list[int], list[ReBarArea]]:
+    def SRoundRebarDistr(paras:SRoundSectParas, attr:dict, r:float):
+        if r - 0.006 < DEFVAL._TOL_ or r - 0.04 > DEFVAL._TOL_:
+            raise Exception("Wrong Re-Bar Ratio")
+        
+        c = paras.C
+        R = paras.R
+        l_line = [2 * np.pi * (R-c)]
+        area = attr['area']
+        decOrder = [0]
+
+        def decFunc(l_line):
+            return [l_line[0]-2*np.pi*DEFVAL._REBAR_D_DEF]
+
+        Res = BarsTools.TryFunc(l_line, area, r, decOrder, decFunc)
+        r = sum(Res[0])
+        return r, Res[1], Res[2]
+        
+    @staticmethod
+    def HRoundRebarDistr(Paras:HRoundSectParas, attr:dict, r:float) -> tuple[float, list[int], list[ReBarArea]]:
         """
         :param Paras:桥墩截面截面参数对象
         :param attr: 桥墩截面参数对象
@@ -471,8 +490,8 @@ class BarsTools:
             raise Exception("Wrong Re-Bar Ratio")
 
         c = Paras.C
-        Rout = Paras.R - c
-        Rin = Paras.R - Paras.T - c
+        Rout = Paras.Rout - c
+        Rin = Paras.Rout - Paras.T - c
         l_line = [Rout*2*np.pi, Rin*2*np.pi]
         area = attr["area"]
         # * Res:([r]:配筋率, [Ns]:钢筋的个数, [As]:钢筋的截面积)
@@ -485,8 +504,19 @@ class BarsTools:
         r = sum(Res[0])
         return r, Res[1], Res[2]
 
-
-
-
-
-
+    @staticmethod
+    def NsChangeByOrder(Ns:list[int], order:list, count:int, func):
+        index = order[count]
+        if type(index) is int:
+            if Ns[index] == 1:
+                return
+            else:
+                Ns[index] = func(Ns[index])
+        elif type(index) is list or type(index) is tuple:
+            for i in index:
+                if Ns[i] == 1:
+                    return
+                else:
+                    Ns[i] = func(Ns[index])
+        else:
+            raise Exception("Wrong Paras")

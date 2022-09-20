@@ -302,8 +302,8 @@ class CrossSection(Comp.Parts, metaclass=ABCMeta):
         self._OrigPoints = p
         self._N_axis = N_axis
 
-        self._Attr:dict = None
-        self._points:list[tuple[float, ...]] = None
+        self._SectAttr:dict = None
+        self._Points:list[tuple[float, ...]] = None
 
         self._OpsSect = None
 
@@ -336,22 +336,24 @@ class CrossSection(Comp.Parts, metaclass=ABCMeta):
 class RCCrossSect(CrossSection):
 
     @abstractmethod
-    def __init__(self, paras, p: tuple[float, ...], N_axis: tuple[float, ...], CoreCon:Paras.ConcreteParas, CoverCon:Paras.ConcreteParas, Rebar:Paras.SteelParas, R_flag, name=""):
+    def __init__(self, paras, p: tuple[float, ...], N_axis: tuple[float, ...], CoreCon:Paras.ConcreteParas, CoverCon:Paras.ConcreteParas, Rebar:Paras.SteelParas, R_flag, fiberSize:tuple[int]=(100, 100), name=""):
         super().__init__(paras, p, N_axis, name)
 
         self._type += "->RC_CrossSect"
         self._CoreCon:Paras.ConcreteParas = CoreCon
         self._CoverCon:Paras.ConcreteParas = CoverCon
         self._Rebar:Paras.SteelParas = Rebar
-        self._Attr, self._points = self._SectAttrBuild()
+        self._SectAttr, self._Points = self._SectAttrBuild()
+        self._FiberSize = fiberSize
 
         if type(R_flag) is float:
             self._RebarsDistr:Paras.SectRebarDistrParas = self._RebarsDistrBuild(R_flag)
-        
-        if type(R_flag) is Paras.SectRebarDistrParas:
+        elif type(R_flag) is Paras.SectRebarDistrParas:
             self._RebarsDistr:Paras.SectRebarDistrParas = R_flag
         else:
             raise Exception("Wrong Params")
+        
+        self._OpsSect = self._OpsSectBuild()
     
     @abstractmethod
     def _OpsSectBuild(self):
@@ -368,6 +370,7 @@ class RCCrossSect(CrossSection):
     @abstractmethod
     def _SectReBuild(self):
         ...
+
     @abstractmethod
     def plotSect(self, Axe3d):
         ...
@@ -375,20 +378,20 @@ class RCCrossSect(CrossSection):
 # * 箱形截面
 class BoxSect(RCCrossSect):
     # __slots__ = []
-    __slots__ = ['_type', '_uniqNum', '_name', '_Paras', '_N_axis', '_Points', '_orig_point', '_attr', '_m', '_OpsSect']
+    # __slots__ = ['_type', '_uniqNum', '_name', '_Paras', '_N_axis', '_Points', '_orig_point', '_attr', '_m', '_OpsSect']
     @Comp.CompMgr()
     def __init__(self, paras: Paras, p: tuple[float, ...], N_axis: tuple[float, ...], Concrete: Paras.ConcreteParas,  R_flag, name=""):
         super().__init__(paras, p, N_axis, Concrete, None, None, R_flag, name)
         self._type += "->BoxSect"
         
-        self._attr, self._poins = self._SectAttrBuild()
-        self._OpsSect = self._OpsSectBuild()
+        # self._attr, self._poins = self._SectAttrBuild()
+        # self._OpsSect = self._OpsSectBuild()
 
     
     def _OpsSectBuild(self):
-        con = OpsObject.OpsConcrete02(*self._CoreCon.val)
-        return OpsObject.OpsBoxSection(self._attr['area'], 
-                            self._attr['inertia_x'], self._attr['inertia_y'], self._attr['inertia_j'], 
+        con = OpsObject.OpsConcrete(*self._CoreCon.val)
+        return OpsObject.OpsBoxSection(self._SectAttr['area'], 
+                            self._SectAttr['inertia_x'], self._SectAttr['inertia_y'], self._SectAttr['inertia_j'], 
                             con)
 
     def _SectAttrBuild(self):
@@ -467,7 +470,7 @@ class BoxSect(RCCrossSect):
     def _SectReBuild(self):
         Comp.CompMgr.removeComp(self._OpsSect)
         Comp.CompMgr.removeComp(self._ConCore)
-        self._attr, self._points = self._SectAttrBuild()
+        self._SectAttr, self._Points = self._SectAttrBuild()
         self._OpsSect = self._OpsSectBuild()
 
     @property
@@ -505,11 +508,11 @@ class BoxSect(RCCrossSect):
     
     @property
     def SectAttr(self):
-        return self._attr
+        return self._SectAttr
 
     @property
     def Points(self):
-        return self._points 
+        return self._Points 
     
     @property
     def Material(self):
@@ -527,11 +530,11 @@ class BoxSect(RCCrossSect):
         """
         return [self._Paras, self._N_axis, self._orig_point, self._Points, self._Arr, self._m, self._OpsSect]
         """
-        return [self._Paras, self._N_axis, self._orig_point, self._points, self._attr, self._ConCore, self._OpsSect]
+        return [self._Paras, self._N_axis, self._orig_point, self._Points, self._SectAttr, self._ConCore, self._OpsSect]
     
     def plotSect(self, ax3d):
         if self.check():
-            x, y, z = np.hsplit(self._points, [1, 2])
+            x, y, z = np.hsplit(self._Points, [1, 2])
             x = x.flatten()
             y = y.flatten()
             z = z.flatten()
@@ -545,7 +548,7 @@ class BoxSect(RCCrossSect):
                 np.hstack((y[8:], y[8])),
                 np.hstack((z[8:], z[8])),
             )
-            orig_point = (self._points[0] + self._points[1]) / 2
+            orig_point = (self._Points[0] + self._Points[1]) / 2
             ax3d.plot(
                 [orig_point[0], orig_point[0] + self.N_axis[0]],
                 [orig_point[1], orig_point[1] + self.N_axis[1]],
@@ -554,7 +557,48 @@ class BoxSect(RCCrossSect):
         else:
             raise Exception("Exist Undefined Member")
 
+class SRoundRCSect(RCCrossSect):
+    __slots__ = []
+    @Comp.CompMgr()
+    def __init__(self, paras: Paras.SRoundSectParas, p: tuple[float, ...], N_axis: tuple[float, ...], CoreCon: Paras.ConcreteParas, CoverCon: Paras.ConcreteParas, Rebar: Paras.SteelParas, R_flag, name=""):
+        super().__init__(paras, p, N_axis, CoreCon, CoverCon, Rebar, R_flag, name)
+        self._type += "->SRoundRCSect"
 
+    def _SectAttrBuild(self):
+        paras:Paras.SRoundSectParas = self._Paras
+        d = paras.R * 2
+        step = paras.R * np.pi / GlobalData.DEFVAL._ROUND_SECT_STEP_DEF
+
+        sectAttr = xsect.round_summary(d, step = step)
+        points = xsect.round_points(d, step = step)
+
+        return sectAttr, points
+
+    def _RebarsDistrBuild(self, R):
+        
+        if len(self._OrigPoints) != 3 or len(self._N_axis) != 3:
+            raise Exception("Error length of orig_point or N_axis, should be 3")
+
+        Rebars: Paras.SectRebarDistrParas = Paras.SectRebarDistrParas(
+            *(UtilTools.BarsTools.SRoundRebarDistr(self._Paras, self._SectAttr, R))
+        )
+        
+        return Rebars
+
+    def _OpsSectBuild(self):
+        paras:Paras.SRoundSectParas = self._Paras
+
+        cover = OpsObject.OpsConcrete02(*self._CoverCon.val)
+        core = OpsObject.OpsConcrete02(*self._CoreCon.val)
+        rebar = OpsObject.OpsSteel02(*self._Rebar.val)
+
+        OpsObject.OpsSRoundFiberSection(paras.C, paras.R, self._SectAttr, self._RebarsDistr, core, cover, rebar, self._FiberSize)
+
+    def _SectReBuild(self):
+        ...
+    
+    def plotSect(self, Axe3d):
+        ...
 # * 空心圆截面桥墩
 class HRoudRCSect(RCCrossSect):
     __slots__ = []
@@ -563,15 +607,16 @@ class HRoudRCSect(RCCrossSect):
     def __init__(self, paras: Paras.HRoundSectParas, p: tuple[float, ...], N_axis: tuple[float, ...], CoreCon: Paras.ConcreteParas, CoverCon: Paras.ConcreteParas, Rebar: Paras.SteelParas, R_flag, name=""):
         super().__init__(paras, p, N_axis, CoreCon, CoverCon, Rebar, R_flag, name)
         self._type += "->HRoundRCSect"
-        self._attr, self._points = self._SectAttrBuild()
-        self._RebarsDistr = self._RebarsDistrBuild()
+        # self._attr, self._Points = self._SectAttrBuild()
+        # self._RebarsDistr = self._RebarsDistrBuild()
     
     def _SectAttrBuild(self):
-        d =  self._Paras.R * 2
-        t = self._Paras.T
+        paras:Paras.HRoundSectParas = self._Paras
+        d = paras.Rout * 2
+        t = paras.T
         step = (d/2 - t) * np.pi / GlobalData.DEFVAL._ROUND_SECT_STEP_DEF
-        attr = xsect.round_summary(d, t, step)
-        points = xsect.round_points(d, t, step)
+        attr = xsect.round_summary(d, t, step = step)
+        points = xsect.round_points(d, t, step = step)
 
         return attr, points
         
@@ -580,10 +625,20 @@ class HRoudRCSect(RCCrossSect):
             raise Exception("Error length of orig_point or N_axis, should be 3")
 
         Rebars: Paras.SectRebarDistrParas = Paras.SectRebarDistrParas(
-            *(UtilTools.BarsTools.HRectRebarDistr(self._Paras, self._Attr, R))
+            *(UtilTools.BarsTools.HRoundRebarDistr(self._Paras, self._SectAttr, R))
         )
         
         return Rebars
+
+    def _OpsSectBuild(self):
+        paras:Paras.HRoundSectParas = self._Paras
+        core = OpsObject.OpsConcrete02(*self._CoreCon.val)
+        cover = OpsObject.OpsConcrete02(*self._CoverCon.val)
+        rebar = OpsObject.OpsSteel02(*self._Rebar.val)
+        return OpsObject.OpsHRoundFiberSection(paras.C, paras.Rout, paras.Rin, self._SectAttr, self._RebarsDistr, cover, core, rebar, self._FiberSize)
+
+    def _SectReBuild(self):
+        ...
 
     def plotSect(self, Axe3d):
         #TODO
@@ -592,27 +647,23 @@ class HRoudRCSect(RCCrossSect):
 
 # * 空心矩形截面
 class HRectRCSect(RCCrossSect):
-    __slots__ = ['_type', '_uniqNum', '_name', '_Paras', '_N_axis', '_Orig_p', '_Attr', '_Points', '_Rebars', 
-                '_ConCore', '_ConCover', '_Steel',
-                '_OpsPierSect']
-
     @Comp.CompMgr()
     def __init__(self, paras: Paras.HRectSectParas, p: tuple[float, ...], N_axis: tuple[float, ...], CoreCon: Paras.ConcreteParas, CoverCon: Paras.ConcreteParas, Rebar: Paras.SteelParas, R_flag, name=""):
         super().__init__(paras, p, N_axis, CoreCon, CoverCon, Rebar, R_flag, name)
+        self._type += "->HrectRcSect"
 
-        self._Attr, self._Points = self._SectAttrBuild()
-        self._opsSect = self._OpsSectBuild()
+        # self._Attr, self._Points = self._SectAttrBuild()
 
     def _OpsSectBuild(self):
 
-        opsConCore = OpsObject.OpsConcrete02(*self._ConCore.val)
-        opsConCover = OpsObject.OpsConcrete02(*self._ConCover.val)
+        opsConCore = OpsObject.OpsConcrete02(*self._CoreCon.val)
+        opsConCover = OpsObject.OpsConcrete02(*self._CoverCon.val)
         opsRebar = OpsObject.OpsSteel02(*self._Rebar.val)
 
-        return OpsObject.OpsHRectFiberSection(self.Paras.cover, self.Paras.width, self.Paras.length, self.Paras.thick, self.RebarsDistr.BarArea, opsConCore, opsConCover, opsRebar)
-    
+        return OpsObject.OpsHRectFiberSection(self._Paras.C, self._Paras.W, self._Paras.L, self._Paras.T, self._RebarsDistr, opsConCore, opsConCover, opsRebar, self._FiberSize)
+
     def _SectAttrBuild(self):
-        paras = self._Paras
+        paras:Paras.HRectSectParas = self._Paras
         # *                | w
         # *       1________|________2
         # *       |  5_____|_____6  |
@@ -676,7 +727,7 @@ class HRectRCSect(RCCrossSect):
                 ]
             )
             points = np.matmul(points, Trans_Yaxis)
-            points = points + self._orig_point
+            points = points + self._OrigPoints
         except:
             pass
     
@@ -688,13 +739,17 @@ class HRectRCSect(RCCrossSect):
             raise Exception("Error length of orig_point or N_axis, should be 3")
 
         Rebars: Paras.SectRebarDistrParas= Paras.SectRebarDistrParas(
-            *(UtilTools.BarsTools.HRectRebarDistr(self._Paras, self._Attr, R)))
+            *(UtilTools.BarsTools.HRectRebarDistr(self._Paras, self._SectAttr, R)))
 
         return Rebars
     
     def _SectReBuild(self):
-        Comp.CompMgr.removeComp(self._OpsPierSect)
-        self._OpsConCore = OpsObject.OpsConcrete02(*self._ConCore.val)
+        ...
+        # Comp.CompMgr.removeComp(self._OpsSect)
+        # self._OpsConCore = OpsObject.OpsConcrete02(*self._CoreCon.val)
+        # self._OpsConCover = OpsObject.OpsConcrete02(*self._OpsConCover.val)
+        # paras:Paras.HRectSectParas = self._Paras
+        # # self._OpsSect = OpsObject.OpsHRectFiberSection(paras.C, paras.W, paras.L, paras.T, paras.)
 
     @property
     def Paras(self):
@@ -737,7 +792,7 @@ class HRectRCSect(RCCrossSect):
     @OrigPoint.setter
     def OrigPoint(self, newVal):
         if type(newVal) is type(self._OrigPoints):
-            self._Orig_p = newVal
+            self._OrigPoints= newVal
             self._SectAttrBuild()
             self._SectReBuild()
         else:
@@ -745,22 +800,22 @@ class HRectRCSect(RCCrossSect):
     
     @property
     def ConCore(self):
-        return self._ConCore
+        return self._CoreCon
     @ConCore.setter
     def ConCore(self, newVal):
-        if type(newVal) is type(self._ConCore):
-            self._ConCore = newVal
+        if type(newVal) is type(self._CoreCon):
+            self._CoreCon = newVal
             self._SectReBuild()
         else:
             raise Exception("Wrong Paras")
     
     @property
     def ConCover(self):
-        return self._ConCover
+        return self._CoverCon
     @ConCover.setter
     def ConCover(self, newVal):
-        if type(newVal) is type(self._ConCover):
-            self._ConCover = newVal
+        if type(newVal) is type(self._CoverCon):
+            self._CoverCon = newVal
             self._SectReBuild()
         else:
             raise Exception("Wrong Paras")
@@ -782,8 +837,7 @@ class HRectRCSect(RCCrossSect):
         return [self._Paras, self._N_axis, self._Orig_p, self._Points, self._Arr, self._Rebars, 
                 self._OpsConCore, self._OpsConCover, self._OpsRebar, self._OpsPierSect]
         """
-        return [self._Paras, self._N_axis, self._Orig_p, self._Points, self._Attr, self._RebarsDistr, 
-                self._OpsConCore, self._OpsConCover, self._OpsRebar, self._OpsPierSect]
+        return [self._Paras, self._N_axis, self._OrigPoints, self._Points, self._Rebar, self._CoreCon, self._CoverCon, self._RebarsDistr, self._OpsSect]
 
     def plotSect(self, ax3d):
         if self.check():

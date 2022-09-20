@@ -64,7 +64,7 @@ class CompMgr:
             return (None, None)
         for index, Comp in enumerate(cls._allComp):
             if Comp.__class__ == tarComp.__class__:
-                if Comp._r == tarComp._r:
+                if Comp.val == tarComp.val:
                     return index, Comp 
             else:
                 pass

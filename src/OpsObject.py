@@ -1,7 +1,11 @@
 # * OpsObj类不需要有Getter和setter
 from abc import ABCMeta, abstractmethod
+import enum
+from typing import Dict
 import numpy as np
 import openseespy.opensees as ops
+
+from src import Paras
 
 from . import Comp
 from . import GlobalData
@@ -199,11 +203,63 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, name=""):
         super(OpsSection, self).__init__(name)
-        self._type += "BridgeCrossSection"
+        self._type += "->BridgeCrossSection"
 
     @abstractmethod
     def _create(self):
         ...
+
+    @staticmethod
+    def RectRebarFiber(p1: tuple, p2: tuple, m: OpsMaterial, area: GlobalData.ReBarArea, n: int):
+        if n == 1:
+            return
+        np1 = np.array(p1)
+        np2 = np.array(p2)
+        d = (np1 - np2) / n
+        np2 = np2 - d
+        np1 = list(np1)
+        np2 = list(np2)
+        ops.layer(
+            "straight",
+            m.uniqNum,
+            n,
+            area.value,
+            float(np1[0]),
+            float(np1[1]),
+            np2[0],
+            np2[1],
+        )
+
+    @staticmethod
+    def RoundRebarFiber(r:float, m:OpsMaterial, area:GlobalData.ReBarArea, n:int):
+        ops.layer("circ", m.uniqNum, n, area, 0, 0, r)
+
+    @staticmethod
+    def HRectConcreteFiber(w:float, l:float, t:float, m: OpsMaterial, fibersize:tuple[int, ...]):
+        
+        # patch('rect', matTag, numSubdivY, numSubdivZ, *crdsI, *crdsJ)
+        p1 = (w / 2, l / 2)
+        p2 = (w / 2, -l / 2)
+        p3 = (-w / 2, -l / 2)
+        p4 = (-w / 2, l / 2)
+        w1 = w - 2 * t
+        l1 = l - 2 * t
+        p11 = (w1 / 2, l1 / 2)
+        p22 = (w1 / 2, -l1 / 2)
+        p33 = (-w1 / 2, -l1 / 2)
+        p44 = (-w1 / 2, l1 / 2)
+        ops.patch("rect", m.uniqNum, *fibersize, *p1, *p22)
+        ops.patch("rect", m.uniqNum, *fibersize, *p2, *p33)
+        ops.patch("rect", m.uniqNum, *fibersize, *p3, *p44)
+        ops.patch("rect", m.uniqNum, *fibersize, *p4, *p11)
+    
+    def RoundConcreteFiber(Rin:float, Rout:float, m:OpsMaterial, fiberSize:tuple[int, ...]):
+        # patch('circ', matTag, numSubdivCirc, numSubdivRad, *center, *rad, *ang)
+        Circ, Rad = fiberSize
+        nRad = int(round((Rout-Rin)/Circ, 0))
+        nCirc = int(round((np.pi*2*Rout + np.pi*2*Rin) / 2 / Rad), 0)
+        ops.patch("circ", m.uniqNum, nCirc, nRad, 0, 0, Rin, Rout, 0, 360)
+
 
 class OpsBoxSection(OpsSection):
     __slots__ = ['_type', '_uniqNum', '_name', '_attr', '_material']
@@ -234,15 +290,125 @@ class OpsBoxSection(OpsSection):
                 alphaY=None,
                 alphaZ=None,
             )
+class OpsHRoundFiberSection(OpsSection):
+    """
+    """
+    @Comp.CompMgr()
+    def __init__(
+        self,
+        cover:float,
+        R_out:float,
+        R_in:float,
+        sectAttr:dict,
+        rebarsDistr:Paras.SectRebarDistrParas,
+        conCover:OpsConcrete02,
+        conCore:OpsConcrete02 = None,
+        rebar:OpsSteel02 = None,
+        fiberSize:tuple = (100, 100),
+        name = ""
+    ):
+        super().__init__(name)
+    
+        self._Rin = R_in
+        self._Rout = R_out
+        self._C = cover
+        self._SectAttr = sectAttr
+        self._RebarDistr = rebarsDistr
+        if conCover == None:
+            conCover = conCore
+        self._CoverCon = conCover
+        self._CoreCon = conCore
+        self._Rebar = rebar
+        self._FiberSize = fiberSize
+    
+    @property
+    def val(self):
+        return [self._Rin, self._Rout, self._C, self._SectAttr, self._RebarDistr, self._CoreCon, self._CoverCon, self._Rebar, self._FiberSize]
+        
+    def _create(self):
 
+        J = self._SectAttr["inertia_j"]
+        G = self._CoreCon._G
+        Rin = self._Rin + self._C
+        Rout = self._Rout - self._C
+
+        ops.section("Fiber", self._uniqNum, "-GJ", G * J)
+
+        # * 普通钢筋纤维部分
+        for count, (As_, Ns_) in enumerate(zip(self._RebarDistr.BarArea, self._RebarDistr.Ns)):
+            Rin += GlobalData.DEFVAL._REBAR_D_DEF * count
+            Rout -= GlobalData.DEFVAL._REBAR_D_DEF * count
+            self.RoundRebarFiber(Rin, self._Rebar, As_[0], Ns_[0])
+            self.RoundRebarFiber(Rout, self._Rebar, As_[1], Ns_[1])
+
+        # * 混凝土纤维部分
+        Rout = self._Rout
+        Rin = Rout - self._C
+        self.RoundConcreteFiber(Rin, Rout, self._CoverCon, self._FiberSize)
+        
+        Rout = Rin
+        Rin = self._Rin + self._C
+        self.RoundConcreteFiber(Rin, Rout, self._CoreCon, self._FiberSize)
+
+        Rout = Rin
+        Rin = self._Rin
+        self.RoundConcreteFiber(Rin, Rout, self._CoverCon, self._FiberSize)
+
+class OpsSRoundFiberSection(OpsSection):
+    @Comp.CompMgr()
+    def __init__(self, 
+        cover:float,
+        R:float,
+        sectAttr:dict,
+        rebarsDistr:Paras.SectRebarDistrParas,
+        conCore:OpsConcrete02,
+        conCover:OpsConcrete02,
+        rebar:OpsSteel02,
+        fiberSize:tuple[int,...],
+        name=""):
+        
+        super().__init__(name)
+        self._type += "->OpsSRoundFiberSection"
+        self._R = R
+        self._C = cover
+        self._SectAttr = sectAttr
+        self._RebarDistr = rebarsDistr
+        self._CoreCon = conCore
+        self._CoverCon = conCover
+        self._Rebar = rebar
+        self._FiberSize = fiberSize
+
+    def val(self):
+        return [self._R, self._C, self._SectAttr, self._RebarDistr, self._CoreCon, self._CoverCon, self._Rebar, self._FiberSize]
+
+    def _create(self):
+        
+        J = self._SectAttr["inertia_j"]
+        G = self._CoreCon._G
+        R = self._R - self._C
+
+        ops.section("Fiber", self._uniqNum, "-GJ", G * J)
+
+        # * 普通钢筋纤维部分
+        for count, (As_, Ns_) in enumerate(zip(self._RebarDistr.BarArea, self._RebarDistr.Ns)):
+            R -= GlobalData.DEFVAL._REBAR_D_DEF * count
+            self.RoundRebarFiber(R, self._Rebar, As_[0], Ns_[0])
+
+        # * 混凝土纤维部分
+        Rout = self._R
+        Rin = Rout - self._C
+        self.RoundConcreteFiber(Rin, Rout, self._CoverCon, self._FiberSize)
+        
+        Rout = Rin
+        Rin = 0
+        self.RoundConcreteFiber(Rin, Rout, self._CoreCon, self._FiberSize)
 
 class OpsHRectFiberSection(OpsSection):
     """
     桥墩纤维截面对象, opensees.py命令为
     ops.Section()
     """
-    __slots__ = ['_type', '_uniqNum', '_name', '_c', '_l', '_w', '_t', '_a1', '_a2', '_CoreCon', '_CoverCon',
-                 '_rebar', '_fiberSize']
+
     @Comp.CompMgr()
     def __init__(
         self,
@@ -250,7 +416,8 @@ class OpsHRectFiberSection(OpsSection):
         width:float,
         length:float,
         thick:float,
-        rebarArea:list[GlobalData.ReBarArea],
+        sectAttr:dict,
+        rebarsDistr:Paras.SectRebarDistrParas,
         conCore: OpsConcrete02,
         conCover: OpsConcrete02 = None,
         rebar: OpsSteel02 = None,
@@ -263,8 +430,8 @@ class OpsHRectFiberSection(OpsSection):
         self._l = length
         self._w = width
         self._t = thick
-        self._a1 = GlobalData.rebarArea[0]
-        self._a2 = GlobalData.rebarArea[1]
+        self._sectAttr = sectAttr
+        self._rebarDistr = rebarsDistr
         self._CoreCon = conCore
         if conCover == None:
             conCover = conCore
@@ -278,90 +445,49 @@ class OpsHRectFiberSection(OpsSection):
         return [self._c, self._l, self._w, self._t, self._a1, self._a2, 
                 self._CoreCon, self._CoverCon, self._rebar, self._fiberSize]
         """
-        return [self._c, self._l, self._w, self._t, self._a1, self._a2, 
+        return [self._c, self._l, self._w, self._t, self._rebarDistr, 
                 self._CoreCon, self._CoverCon, self._rebar, self._fiberSize]
-
-    def RebarFiber(slef, p1: tuple, p2: tuple, m: OpsMaterial, area: GlobalData.ReBarType, n: int):
-        if n == 1:
-            return
-        np1 = np.array(p1)
-        np2 = np.array(p2)
-        d = (np1 - np2) / n
-        np2 = np2 - d
-        np1 = list(np1)
-        np2 = list(np2)
-        ops.layer(
-            "straight",
-            m.uniqNum,
-            n,
-            area.value,
-            float(np1[0]),
-            float(np1[1]),
-            np2[0],
-            np2[1],
-        )
-
-    def HConcreteFiber(self, w, l, t, m: OpsMaterial):
-        # patch('rect', matTag, numSubdivY, numSubdivZ, *crdsI, *crdsJ)
-        p1 = (w / 2, l / 2)
-        p2 = (w / 2, -l / 2)
-        p3 = (-w / 2, -l / 2)
-        p4 = (-w / 2, l / 2)
-        w1 = w - 2 * t
-        l1 = l - 2 * t
-        p11 = (w1 / 2, l1 / 2)
-        p22 = (w1 / 2, -l1 / 2)
-        p33 = (-w1 / 2, -l1 / 2)
-        p44 = (-w1 / 2, l1 / 2)
-        ops.patch("rect", m.uniqNum, *self._fiberSize, *p1, *p22)
-        ops.patch("rect", m.uniqNum, *self._fiberSize, *p2, *p33)
-        ops.patch("rect", m.uniqNum, *self._fiberSize, *p3, *p44)
-        ops.patch("rect", m.uniqNum, *self._fiberSize, *p4, *p11)
-
 
 
     def _create(self):
-        J = self.pierSect.Arr["inertia_j"]
+        J = self._sectAttr["inertia_j"]
         G = self._CoreCon._G
         c = self._c
         t = self._t - 2 * c
         w = self._w - 2 * c
         l = self._l - 2 * c
-        a1 = self._a1
-        a2 = self._a2
         ops.section("Fiber", self._uniqNum, "-GJ", G * J)
-        count = 0
+
         # * 普通钢筋纤维部分
-        for N_x1, N_x2, N_y1, N_y2 in self.pierSect.Rebars.Ns:
+        for count, (As_, Ns_) in enumerate(zip(self._rebarDistr.BarArea, self._rebarDistr.Ns)):
             x = (w - GlobalData.DEFVAL._REBAR_D_DEF * count) / 2
             y = (l - GlobalData.DEFVAL._REBAR_D_DEF * count) / 2
             p11 = (+x, +y)
             p12 = (+x, -y)
             p21 = (-x, +y)
             p22 = (-x, -y)
-            self.RebarFiber(p11, p12, self._rebar, a1[count], N_x1)
-            self.RebarFiber(p12, p22, self._rebar, a1[count], N_y1)
-            self.RebarFiber(p22, p21, self._rebar, a1[count], N_x1)
-            self.RebarFiber(p21, p11, self._rebar, a1[count], N_y1)
+
             x = w - 2 * t + GlobalData.DEFVAL._REBAR_D_DEF * count
             y = l - 2 * t + GlobalData.DEFVAL._REBAR_D_DEF * count
-            p11 = (+x, +y)
-            p12 = (+x, -y)
-            p21 = (-x, +y)
-            p22 = (-x, -y)
-            self.RebarFiber(p11, p12, self._rebar, a2[count], N_x2)
-            self.RebarFiber(p12, p22, self._rebar, a2[count], N_y2)
-            self.RebarFiber(p22, p21, self._rebar, a2[count], N_x2)
-            self.RebarFiber(p21, p11, self._rebar, a2[count], N_y2)
+            p33 = (+x, +y)
+            p34 = (+x, -y)
+            p43 = (-x, +y)
+            p44 = (-x, -y)
+            
+            p1_ = [p11, p12, p22, p21, p33, p34, p44, p43]
+            p2_ = [p12, p22, p21, p11, p34, p44, p43, p33]
+            for p1, p2, As, Ns in zip(p1_, p2_, As_, Ns_):
+                self.RectRebarFiber(p1, p2, self._rebar, As, Ns)
+
         # * 混凝土纤维部分
-        self.HConcreteFiber(w, l, c, self._CoverCon)
+        self.HRectConcreteFiber(w, l, c, self._CoverCon)
         w1 = w - 2 * c
         l1 = l - 2 * c
         t1 = t - 2 * c
-        self.HConcreteFiber(w1, l1, t1, self._CoreCon)
+        self.HRectConcreteFiber(w1, l1, t1, self._CoreCon)
         w2 = w - 2 * t + 2 * c
         l2 = l - 2 * t + 2 * c
-        self.HConcreteFiber(w2, l2, c, self._CoverCon)
+        self.HRectConcreteFiber(w2, l2, c, self._CoverCon)
 
 class OpsElement(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod
@@ -425,10 +551,10 @@ class OpsEBCElement(OpsElement):
         ops.element(
             "elasticBeamColumn",
             self._uniqNum,
-            *(self.Node1),
-            *(self.Node2),
-            self.Sect.uniqNum,
-            self.Trans.uniqNum
+            *(self._Node1),
+            *(self._Node2),
+            self._Sect.uniqNum,
+            self._transf.uniqNum
         )
 
 class OpsNBCElement(OpsElement):
