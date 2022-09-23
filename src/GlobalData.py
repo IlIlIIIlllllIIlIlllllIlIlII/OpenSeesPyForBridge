@@ -1,5 +1,19 @@
 from enum import Enum
+class CoordinateSystem:
+    @staticmethod
+    def Show():
+        x = """                              
+                           z^                 
+                            |      ^y        
+                            |     /          
+                            |    /           
+                            |   /            
+                            |  /             
+                            | /              
+                            |/______________\ x
+            """
 
+        print(x)
 class DEFVAL:
 
     @classmethod

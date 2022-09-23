@@ -571,6 +571,7 @@ class SRoundRCSect(RCCrossSect):
 
         sectAttr = xsect.round_summary(d, step = step)
         points = xsect.round_points(d, step = step)
+        points = UtilTools.PointsTools.TransXsectPointTo3D(points)
 
         return sectAttr, points
 
@@ -617,6 +618,7 @@ class HRoudRCSect(RCCrossSect):
         step = (d/2 - t) * np.pi / GlobalData.DEFVAL._ROUND_SECT_STEP_DEF
         attr = xsect.round_summary(d, t, step = step)
         points = xsect.round_points(d, t, step = step)
+        points = UtilTools.PointsTools.TransXsectPointTo3D(points)
 
         return attr, points
         

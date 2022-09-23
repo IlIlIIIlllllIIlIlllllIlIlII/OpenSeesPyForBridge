@@ -154,5 +154,11 @@ class Parts(Component, metaclass=ABCMeta):
     def _SectReBuild(self):
         ...
 
+class Loads(Component, metaclass=ABCMeta):
+    @abstractmethod
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += '->Laods'
+
 class HRectSect():
     ...

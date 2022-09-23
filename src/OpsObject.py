@@ -1,9 +1,8 @@
 # * OpsObj类不需要有Getter和setter
 from abc import ABCMeta, abstractmethod
-import enum
-from typing import Dict
 import numpy as np
 import openseespy.opensees as ops
+from enum import Enum
 
 from src import Paras
 
@@ -75,7 +74,7 @@ class OpsFix(OpsBoundary):
         return [self._node, self._fix]
 
     def _create(self):
-        ops.fix(self._uniqNum, *self.fix)
+        ops.fix(self._uniqNum, *self._fix)
 
 class OpsLinearTrans(Comp.OpsObj):
     __slots__ = ["_type", "_uniqNum", "_name", "_vecz"]
@@ -92,7 +91,7 @@ class OpsLinearTrans(Comp.OpsObj):
         return [self._vecz]
 
     def _create(self):
-        ops.geomTransf("Linear", self._uniqNum, *self.vecxz)
+        ops.geomTransf("Linear", self._uniqNum, *self._vecz)
 
 class OpsMaterial(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod
@@ -231,11 +230,11 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         )
 
     @staticmethod
-    def RoundRebarFiber(r:float, m:OpsMaterial, area:GlobalData.ReBarArea, n:int):
+    def RoundRebarFiberBuild(r:float, m:OpsMaterial, area:GlobalData.ReBarArea, n:int):
         ops.layer("circ", m.uniqNum, n, area, 0, 0, r)
 
     @staticmethod
-    def HRectConcreteFiber(w:float, l:float, t:float, m: OpsMaterial, fibersize:tuple[int, ...]):
+    def HRectConcreteFiberBuild(w:float, l:float, t:float, m: OpsMaterial, fibersize:tuple[int, ...]):
         
         # patch('rect', matTag, numSubdivY, numSubdivZ, *crdsI, *crdsJ)
         p1 = (w / 2, l / 2)
@@ -253,7 +252,7 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         ops.patch("rect", m.uniqNum, *fibersize, *p3, *p44)
         ops.patch("rect", m.uniqNum, *fibersize, *p4, *p11)
     
-    def RoundConcreteFiber(Rin:float, Rout:float, m:OpsMaterial, fiberSize:tuple[int, ...]):
+    def RoundConcreteFiberBuild(Rin:float, Rout:float, m:OpsMaterial, fiberSize:tuple[int, ...]):
         # patch('circ', matTag, numSubdivCirc, numSubdivRad, *center, *rad, *ang)
         Circ, Rad = fiberSize
         nRad = int(round((Rout-Rin)/Circ, 0))
@@ -290,6 +289,7 @@ class OpsBoxSection(OpsSection):
                 alphaY=None,
                 alphaZ=None,
             )
+
 class OpsHRoundFiberSection(OpsSection):
     """
     """
@@ -338,21 +338,21 @@ class OpsHRoundFiberSection(OpsSection):
         for count, (As_, Ns_) in enumerate(zip(self._RebarDistr.BarArea, self._RebarDistr.Ns)):
             Rin += GlobalData.DEFVAL._REBAR_D_DEF * count
             Rout -= GlobalData.DEFVAL._REBAR_D_DEF * count
-            self.RoundRebarFiber(Rin, self._Rebar, As_[0], Ns_[0])
-            self.RoundRebarFiber(Rout, self._Rebar, As_[1], Ns_[1])
+            self.RoundRebarFiberBuild(Rin, self._Rebar, As_[0], Ns_[0])
+            self.RoundRebarFiberBuild(Rout, self._Rebar, As_[1], Ns_[1])
 
         # * 混凝土纤维部分
         Rout = self._Rout
         Rin = Rout - self._C
-        self.RoundConcreteFiber(Rin, Rout, self._CoverCon, self._FiberSize)
+        self.RoundConcreteFiberBuild(Rin, Rout, self._CoverCon, self._FiberSize)
         
         Rout = Rin
         Rin = self._Rin + self._C
-        self.RoundConcreteFiber(Rin, Rout, self._CoreCon, self._FiberSize)
+        self.RoundConcreteFiberBuild(Rin, Rout, self._CoreCon, self._FiberSize)
 
         Rout = Rin
         Rin = self._Rin
-        self.RoundConcreteFiber(Rin, Rout, self._CoverCon, self._FiberSize)
+        self.RoundConcreteFiberBuild(Rin, Rout, self._CoverCon, self._FiberSize)
 
 class OpsSRoundFiberSection(OpsSection):
     @Comp.CompMgr()
@@ -392,16 +392,16 @@ class OpsSRoundFiberSection(OpsSection):
         # * 普通钢筋纤维部分
         for count, (As_, Ns_) in enumerate(zip(self._RebarDistr.BarArea, self._RebarDistr.Ns)):
             R -= GlobalData.DEFVAL._REBAR_D_DEF * count
-            self.RoundRebarFiber(R, self._Rebar, As_[0], Ns_[0])
+            self.RoundRebarFiberBuild(R, self._Rebar, As_[0], Ns_[0])
 
         # * 混凝土纤维部分
         Rout = self._R
         Rin = Rout - self._C
-        self.RoundConcreteFiber(Rin, Rout, self._CoverCon, self._FiberSize)
+        self.RoundConcreteFiberBuild(Rin, Rout, self._CoverCon, self._FiberSize)
         
         Rout = Rin
         Rin = 0
-        self.RoundConcreteFiber(Rin, Rout, self._CoreCon, self._FiberSize)
+        self.RoundConcreteFiberBuild(Rin, Rout, self._CoreCon, self._FiberSize)
 
 class OpsHRectFiberSection(OpsSection):
     """
@@ -480,32 +480,37 @@ class OpsHRectFiberSection(OpsSection):
                 self.RectRebarFiber(p1, p2, self._rebar, As, Ns)
 
         # * 混凝土纤维部分
-        self.HRectConcreteFiber(w, l, c, self._CoverCon)
+        self.HRectConcreteFiberBuild(w, l, c, self._CoverCon)
         w1 = w - 2 * c
         l1 = l - 2 * c
         t1 = t - 2 * c
-        self.HRectConcreteFiber(w1, l1, t1, self._CoreCon)
+        self.HRectConcreteFiberBuild(w1, l1, t1, self._CoreCon)
         w2 = w - 2 * t + 2 * c
         l2 = l - 2 * t + 2 * c
-        self.HRectConcreteFiber(w2, l2, c, self._CoverCon)
+        self.HRectConcreteFiberBuild(w2, l2, c, self._CoverCon)
 
 class OpsElement(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod
-    def __init__(self, name=""):
+    def __init__(self, node1:OpsNode, node2:OpsNode, sect:OpsSection, transf:OpsLinearTrans, name=""):
         super(OpsElement, self).__init__(name)
         self._type += "BridgeElement"
+        self._Node1 = node1
+        self._Node2 = node2
+        self._Sect = sect
+        self._Transf = transf
 
     @abstractmethod
     def _create(self):
         ...
 
 class OpsZLElement(OpsElement):
-    __slots__ = ["_type", "_uniqNum", "_name", "_node1", "_node2", "_m", "_dirs"]
+    __slots__ = []
     @Comp.CompMgr()
     def __init__(self, node1:OpsNode, node2:OpsNode, mats:list[OpsMaterial], dirs:list[int], name=""):
-        super().__init__(name)
-        self._node1 = node1
-        self._node2 = node2
+        super().__init__(node1, node2, None, None, name)
+
+        self._type = '->OpsZeroLengthElement'
+
         if len(mats) != len(dirs):
             raise Exception("wrong paras:{} and {}".format(mats, dirs))
         self._m = mats
@@ -516,10 +521,10 @@ class OpsZLElement(OpsElement):
         """
         return [self._node1, self._node2, self._m, self._dirs]
         """
-        return [self._node1, self._node2, self._m, self._dirs]
+        return [self._Node1, self._Node2, self._m, self._dirs]
 
     def _create(self):
-        ops.element('zeroLength', self._uniqNum, self._node1.uniqNum, self._node2.uniqNum, 
+        ops.element('zeroLength', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, 
                     '-mat', *self._m, '-dir', *self._dirs)
 
 
@@ -528,24 +533,21 @@ class OpsEBCElement(OpsElement):
     ElasticBeamColumn单元,使用的opensees.py命令为:
     element('elasticBeamColumn', eleTag, *eleNodes, secTag, transfTag, <'-mass', mass>, <'-cMass'>)
     """
-    __slots__ = ["_type", "_uniqNum", "_name","_Node1", "_Node2", "_Sect", "_localZ", "_transf"]
+    __slots__ = []
     @Comp.CompMgr()
     def __init__(
         self, node1:tuple[int, ...], node2: tuple[int, ...], sec: OpsSection, localZ: tuple, name=""
     ):
-        super(OpsEBCElement, self).__init__(name)
-        self._type += "ElasticBeamColumnElement"
-        self._Node1 = node1
-        self._Node2 = node2
-        self._Sect = sec
-        self._transf = OpsLinearTrans(localZ)
+        super(OpsEBCElement, self).__init__(node1, node2, sec, OpsLinearTrans(localZ), name)
+
+        self._type += "->ElasticBeamColumnElement"
 
     @property
     def val(self):
         """
         return [self._Node1, self._Node2, self._Sect, self._localZ, self._transf]
         """
-        return [self._Node1, self._Node2, self._Sect,  self._transf]
+        return [self._Node1, self._Node2, self._Sect,  self._Transf]
 
     def _create(self):
         ops.element(
@@ -554,22 +556,17 @@ class OpsEBCElement(OpsElement):
             *(self._Node1),
             *(self._Node2),
             self._Sect.uniqNum,
-            self._transf.uniqNum
+            self._Transf.uniqNum
         )
 
 class OpsNBCElement(OpsElement):
-    __slots__ = ["_type", "_uniqNum", "_name",'_node1', '_node2', '_sect', '_localZ', '_trans', 
-                '_intgrN', '_maxIer', '_tol', '_mass', '_intgrTpye']
+    __slots__ = []
     @Comp.CompMgr()
     def __init__(self, node1:tuple[int, ...], node2:tuple[int, ...], sect:OpsBoxSection, localZ:tuple[int],
                 IntgrNum:int=5, maxIter=10, tol:float=1e-12, mass:float=0.0, IntgrType:str="Lobatto", name=""):
-        super(OpsElement, self).__init__(name)
-        self._type = "->NBCElement"
-        self._node1 = node1
-        self._node2 = node2
-        self._sect = sect
-        self._localZ = localZ
-        self._trans = OpsLinearTrans(localZ)
+        super(OpsNBCElement, self).__init__(node1, node2, sect, OpsLinearTrans(localZ), name)
+        self._type += "->NonlinearBeamColumnElement"
+
         self._intgrN = IntgrNum
         self._maxIer = maxIter
         self._tol = tol
@@ -581,12 +578,85 @@ class OpsNBCElement(OpsElement):
         """
         return [self._node1, self._node2, self._sect, self._localZ, self._trans] 
         """
-        return [self._node1, self._node2, self._sect, self._localZ, self._trans] 
+        return [self._Node1, self._Node2, self._Sect,  self._Transf] 
 
     def _create(self):
         # element('nonlinearBeamColumn', eleTag, *eleNodes, numIntgrPts, 
         # secTag, transfTag, '-iter', maxIter=10, tol=1e-12, '-mass', mass=0.0, 
         # '-integration', intType)
-        ops.element('nonlinearBeamColumn', self._uniqNum, *self._node1, *self._node2, 
-                    self._intgrN, self._sect.uniqNum, self._trans, '-iter', self._maxIer, self._tol,
+        ops.element('nonlinearBeamColumn', self._uniqNum, *self._Node1, *self._Node2, 
+                    self._intgrN, self._Sect.uniqNum, self._Transf, '-iter', self._maxIer, self._tol,
                     '-mass', self._mass, '-itegration', self._intgrType)
+
+class OpsTimeSeries(Comp.OpsObj):
+    @abstractmethod
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += '->TimeSerise'
+
+    @abstractmethod
+    def _create(self):
+        ...
+
+class OpsConstTimeSeries(OpsTimeSeries):
+    @Comp.CompMgr()
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += '->ConstantTimeSeries'
+    
+    def _create(self):
+        # timeSeries('Constant', tag, '-factor', factor=1.0)
+        ops.timeSeries('Constant', self._uniqNum)
+
+class OpsLinearTimeSerise(OpsTimeSeries):
+    @Comp.CompMgr()
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += '->LinearTimeSeries'
+    
+    def _create(self):
+    # timeSeries('Linear', tag, '-factor', factor=1.0, '-tStart', tStart=0.0)
+        ops.timeSeries('Linear', self._uniqNum)
+
+class OpsTimeSeriesEnum(Enum):
+    Linear = OpsLinearTimeSerise()
+    Const = OpsConstTimeSeries()
+
+class OpsPlainLoads(Comp.OpsObj):
+    @abstractmethod
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += '->OpsLoads'
+    
+    @abstractmethod
+    def _create(self):
+        # opattern('Plain', patternTag, tsTag, '-fact', fact)
+        ops.pattern('Plain', self._uniqNum, OpsTimeSeriesEnum.Linear.value.uniqNum)
+
+class OpsNodeLoad(OpsPlainLoads):
+    def __init__(self, load:tuple[float], node:OpsNode, name=""):
+        super().__init__(name)
+        self._type += '->OpsNodeLoad'
+        self._Load = load
+        self._Node = node
+    
+    def _create(self):
+        # load(nodeTag, *loadValues)
+        super()._create()
+        ops.load(self._Node.uniqNum, *self._Load)
+
+class OpsEleLoad(OpsPlainLoads):
+    def __init__(self, load:tuple[float], ele:OpsElement, name=""):
+        super().__init__(name)
+        self._type += '->OpsElementLoad'
+        self._Load = load
+        self._Element = ele
+        self._Element._Transf._vecz
+        self._Element._Node1._xyz
+        self._Element._Node2._xyz
+        UtilTools.PointsTools.vectSub(x, y)
+
+    def _create(self):
+        super()._create()
+        # ops.eleLoad('-ele', self._Element.uniqNum, '-type', '-beamUniform', , <Wz>, Wx=0.0)
+        

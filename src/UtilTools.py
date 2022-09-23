@@ -1,10 +1,12 @@
 #%%
+from tkinter.tix import Tree
 import numpy as np
+import math
+from scipy.spatial.transform import Rotation as R
 
 from .Comp import Paras
 from .GlobalData import DEFVAL, ReBarArea, ReBarType
 from .Paras import HRectSectParas, HRoundSectParas, SRoundSectParas
-from src import GlobalData
 #%%
 class SectTools:
     @staticmethod
@@ -34,10 +36,21 @@ class SectTools:
 class PointsTools:
     @staticmethod
     def PointsDist(p1:tuple[int, ...], p2:tuple[int, ...]) -> float:
-        return float(np.sqrt(np.sum((np.array(p1) - np.array(p2)) ** 2)))
+        """
+        计算2个点之间的距离
+        """
+        if type(p1) is not np.ndarray:
+            p1 = np.array(p1)
+        
+        if type(p2) is not np.ndarray:
+            p2 = np.array(p2)
+        return float(np.sqrt(np.sum((p1 - p2) ** 2)))
 
     @staticmethod
     def LinePointBuilder(p1:tuple[int, ...], p2:tuple[int, ...], intervalList:list[int]):
+        """
+        根据intervallist长度内插值列表,计算一条直线上对应的点坐标
+        """
         dx = p1[0] - p2[0]
         dy = p1[1] - p2[1]
         dz = p1[2] - p2[2]
@@ -52,41 +65,259 @@ class PointsTools:
         else:
             raise Exception("wrong paras")
         return pointsList
+    @staticmethod
+    def ndarray2vect(x:np.ndarray):
+        return (x[0], x[1], x[2])
 
     @staticmethod
-    def vectAdd(x:tuple, y):
-        if type(x) == type(y):
-            return (x[0]+y[0], x[1]+y[1], x[2]+y[2])
-        elif type(y) == float or type(y) == int:
-            return (x[0]+y, x[1]+y, x[2]+y)
-        else:
-            raise Exception("wrong paras")
+    def vectAdd(x:tuple[float], y):
+        """
+        向量加法
+        """
+        if type(x) is not np.ndarray:
+            x = np.array(x)
+        return x + y
 
     @staticmethod
-    def vectSub(x:tuple, y):
-        if type(x) == type(y):
-            return (x[0]-y[0], x[1]-y[1], x[2]-y[2])
-        elif type(y) == float or type(y) == int:
-            return (x[0]-y, x[1]-y, x[2]-y)
-        else:
-            raise Exception("wrong paras")
+    def vectSub(x:tuple[float], y):
+        """
+        向量减法
+        """
+        if type(x) is not np.ndarray:
+            x = np.array(x)
+        
+        return x-y
 
     @staticmethod
-    def vectEnlarge(x, y):
+    def vectEnlarge(x:tuple, y):
+        """
+        拉长向量
+        """
         if type(y) == int or type(y) == float:
-            return (x[0]*y, x[1]*y, x[2]*y)
+            return x * y
         else:
             raise Exception("wrong paras")
     
     @staticmethod
-    def vectTrueDiv(x, y):
+    def vectTrueDiv(x, y) -> np.ndarray:
+        """
+        向量除法
+        """
+        if type(x) is not np.ndarray:
+            x = np.array(x)
+
         if type(y) == int or type(y) == float:
-            return (x[0]/y, x[1]/y, x[2]/y)
+            return x/y
     
     @staticmethod
-    def vectFloorDiv(x, y):
+    def vectFloorDiv(x, y) -> np.ndarray:
+        """
+        向量整除
+        """
+
+        if type(x) is not np.ndarray:
+            x = np.array(x)
         if type(y) == int or type(y) == float:
-            return (x[0]//y, x[1]//y, x[2]//y)
+            return x//y
+
+    @staticmethod
+    def NormOfvect(x:tuple[float,...]) -> float:
+        """
+        向量的模
+        """
+        if type(x) is not np.ndarray:
+            x = np.array(x)
+        return PointsTools.PointsDist(x, (0, 0, 0))
+
+    @staticmethod
+    def vectAngle(x:tuple[float], y:tuple[float]) -> float:
+        """
+        向量的夹角
+        """
+        xnorm = PointsTools.NormOfvect(x)
+        ynorm = PointsTools.NormOfvect(y)
+        cos = x[0] * y[0] + x[1] * y[1] + x[2] * y[2] / ynorm / xnorm
+
+        return np.arccos(cos)
+
+    @staticmethod
+    def vectNormalize(x:tuple[float]) -> np.ndarray:
+        """
+        向量的归一化
+        """
+        if type(x) is not np.ndarray:
+            x = np.array(x)
+        norm = PointsTools.NormOfvect(x)
+
+        return x/norm
+    
+    @staticmethod
+    def NormalVectOfPlane(planeVect1:tuple[float, ...], planeVect2:tuple[float, ...]) -> np.ndarray:
+        """
+        平面的法向量
+        """
+        if type(planeVect1) is not np.ndarray:
+            planeVect1 = np.array(planeVect1)
+        if type(planeVect2) is not np.ndarray:
+            planeVect2 = np.array(planeVect2)
+        a = np.vstack([planeVect1, planeVect2, np.array([0, 0, 1])])
+        # a = np.array(
+        #     [planeVect1,
+        #     planeVect2,
+        #     (0, 0, 1)]
+        # )
+        b = np.array(
+            [0, 0, 1]
+        )
+        
+        c = np.linalg.solve(a, b)
+
+        c = PointsTools.vectNormalize(c)
+
+        return c
+    
+    @staticmethod
+    def vectPlaneAngle(vect:tuple[float, ...], planeVect1:tuple[float, ...], planeVect2:tuple[float, ...]) -> float:
+        if type(planeVect1) is not np.ndarray:
+            planeVect1 = np.array(planeVect1)
+        if type(planeVect2) is not np.ndarray:
+            planeVect2 = np.array(planeVect2)
+
+        normalVect = PointsTools.NormalVectOfPlane(planeVect1, planeVect2)
+
+        theta = PointsTools.vectAngle(vect, normalVect)
+
+        return np.pi/2-theta
+    
+    @staticmethod
+    def IsVectsLegal(vectlist:np.ndarray):
+        if vectlist is not np.ndarray:
+            vectlist = np.array(vectlist)
+        
+        if vectlist.shape == (1, 3):
+            Util.isOnlyHas(vectlist, 0)
+        for vect in vectlist:
+            ...
+
+
+    @staticmethod
+    def IsVectInPlane(vect:np.ndarray, planeVect1:np.ndarray, planeVect2:np.ndarray) -> bool:
+        
+        normalVect = PointsTools.NormalVectOfPlane(planeVect1, planeVect2)
+
+        cos = PointsTools.vectAngle(vect, normalVect)
+        if Util.TOLEQ(cos, 1):
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def ProjectVectInPlane(vect:np.ndarray, planeVect1:np.ndarray, planeVect2:np.ndarray):
+        if type(vect) is not np.ndarray:
+            vect = np.array(vect)
+        if type(planeVect1) is not np.ndarray:
+            planeVect1 = np.array(planeVect1)
+        if type(planeVect2) is not np.ndarray:
+            planeVect2 = np.array(planeVect2)
+        n = PointsTools.NormalVectOfPlane(planeVect1, planeVect2)
+        norm = PointsTools.NormOfvect(n)
+        a = n * vect / norm ** 2
+        return vect - (a * n)
+
+    @staticmethod
+    def TransXsectPointTo3D(point:np.ndarray):
+
+        if type(point) is not np.ndarray or point.shape[-1] != 3:
+            raise Exception("Wrong Params, point should be produced by Xsect")
+        
+        zero = np.zeros_like(point[:,0]).reshape(-1, 1)
+        p3d = np.hstack(zero, point)
+        
+        return p3d
+
+    @staticmethod
+    def RotatePoints(Points:list[float], NewXAxis:tuple[float, ...], NewZAxis:tuple[float, ...]):
+        """
+        对点进行旋转,输出点的坐标
+        """
+        
+        # * 整体坐标系X轴
+        XAxis = np.array((1, 0, 0))
+        YAxis = np.array((0, 1, 0))
+        ZAxis = np.array((0, 0, 1))
+        # * 绕Z转动，计算x-y平面的角度变化
+        theta = PointsTools.vectPlaneAngle(NewXAxis, XAxis, ZAxis)
+        if Util.TOLLT(NewXAxis[0], XAxis):
+            theta = 2 * np.pi - theta
+
+        rat = R.from_euler('z', (theta))
+        if type(Points) is not np.ndarray:
+            Points = np.array(Points)
+
+        Points = rat.apply(Points)
+        XAxis = rat.apply(XAxis)
+        YAxis = rat.apply(YAxis)
+        ZAxis = rat.apply(ZAxis)
+
+        # * 绕Y转动，计算x-z平面的角度变化
+        theta = PointsTools.vectPlaneAngle(NewXAxis, XAxis, YAxis)
+        if Util.TOLLT(XAxis[2], 0):
+            theta = 2 * np.pi - theta
+
+        rat = R.from_euler('y', (-theta))
+        if type(Points) is not np.ndarray:
+            Points = np.array(Points)
+
+        Points = rat.apply(Points)
+        XAxis = rat.apply(XAxis)
+        YAxis = rat.apply(YAxis)
+        ZAxis = rat.apply(ZAxis)
+
+        # * 绕X转动，计算y-z平面的角度变化
+        theta = PointsTools.vectPlaneAngle(NewZAxis, XAxis, ZAxis)
+        # TODO
+        # if 
+        
+        
+        # cos_theta = (x1 * x3 + y1 * y3) / math.sqrt(x3 * x3 + y3 * y3)
+        # theta = np.arccos(cos_theta)
+        # if y3 < 0:
+        #     theta = 2 * np.pi - theta
+
+        # * 绕Y转动，计算x-z平面的角度变化
+        # cos_phi = (x1 * x3 + z1 * z3) / math.sqrt(x2 * x3 + z3 * z3)
+        # phi = -np.arccos(cos_phi)
+        # if z3 < 0:
+        #     phi = 2 * np.pi - phi
+
+        # * 绕X转动，计算y-z平面的角度变化
+        # cos_psi = 
+
+
+        # * 绕X轴转动， 计算x-y平面的转角
+        # cos_psi = ()
+
+        # try:
+        #     cos_theta = (x1 * x2 + y1 * y2) / math.sqrt(x2 * x2 + y2 * y2)
+        #     theta = np.arccos(cos_theta)
+        #     if y2 < 0:
+        #         theta = 2 * np.pi - theta
+        #     Trans_Zaxis = np.array(
+        #         [
+        #             [np.cos(theta), np.sin(theta), 0],
+        #             [-np.sin(theta), np.cos(theta), 0],
+        #             [0, 0, 1],
+        #         ]
+        #     )
+        #     points = np.matmul(Points, Trans_Zaxis)
+        # except:
+        #     pass
+        # # * 绕Y转动，计算x-z平面的角度变化
+        # try:
+        #     cos_theta = (x1 * x2 + z1 * z2) / math.sqrt(x2 * x2 + z2 * z2)
+        #     theta = -np.arccos(cos_theta)
+        # except:
+        #     pass
 
 class Util:
 
@@ -154,20 +385,36 @@ class Util:
             return [obj]
 
     @staticmethod
-    def isOnlyHas(obj, item) -> bool:
-        if not np.iterable(item):
-            item = [item]
+    def isOnlyHas(obj, item, flatten=False) -> bool:
+        if obj is not np.ndarray:
+            obj = np.array(obj)
+        if item is not np.ndarray:
+            item = np.array(item)
 
-        if np.iterable(obj):
-            
-            flag = True
+        if flatten is True:
+            obj = obj.reshape(1, -1)
+            item = obj.reshape(1, -1)
+
             for i in obj:
                 if i not in item:
-                    flag = False
-
-            return flag
+                    return False
+            
+            return True
         else:
-            return (obj in item)
+            if len(item.shape) == 1:
+                item = item.reshape(1, -1)
+
+            if len(obj.shape) == 1:
+                obj = obj.reshape(1, -1)
+                obj = np.vstack([obj, obj])
+
+            if len(obj.shape) != len(item.shape) or obj.shape[-1] != obj.shape[-1]:
+                raise Exception("wrong paras")
+
+            for i in obj:
+                if i not in item:
+                    return False
+            return True
 
     @staticmethod
     def iter_isOnlyHas(obj, item):
