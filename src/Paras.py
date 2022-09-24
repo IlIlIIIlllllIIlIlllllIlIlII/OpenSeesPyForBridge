@@ -89,7 +89,7 @@ class BoxSectParas(SectParas):
 
     @property
     def web_T(self):
-        return self.web_T
+        return self._web_thick
     @web_T.setter
     def web_T(self, newVal):
         if type(newVal) is int or type(newVal) is float:

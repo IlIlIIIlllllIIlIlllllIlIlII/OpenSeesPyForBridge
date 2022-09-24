@@ -299,7 +299,7 @@ class CrossSection(Comp.Parts, metaclass=ABCMeta):
 
         self._type += "->CrossSect" 
         self._Paras = paras
-        self._OrigPoints = p
+        self._OrigPoint = p
         self._N_axis = N_axis
 
         self._SectAttr:dict = None
@@ -325,7 +325,7 @@ class CrossSection(Comp.Parts, metaclass=ABCMeta):
 
     def check(self):
         if (
-            type(self._OrigPoints) != np.ndarray
+            type(self._OrigPoint) != np.ndarray
             or type(self._N_axis) != tuple
         ):
             return False
@@ -380,7 +380,10 @@ class BoxSect(RCCrossSect):
     # __slots__ = []
     # __slots__ = ['_type', '_uniqNum', '_name', '_Paras', '_N_axis', '_Points', '_orig_point', '_attr', '_m', '_OpsSect']
     @Comp.CompMgr()
-    def __init__(self, paras: Paras, p: tuple[float, ...], N_axis: tuple[float, ...], Concrete: Paras.ConcreteParas,  R_flag, name=""):
+    def __init__(self, paras: Paras, p: tuple[float, ...], N_axis: tuple[float, ...], Concrete: Paras.ConcreteParas, R_flag=None, name=""):
+        if R_flag is not None:
+            print("R_flag is not used in BoxSect currently, has been set to 0")
+            R_flag = 0.0
         super().__init__(paras, p, N_axis, Concrete, None, None, R_flag, name)
         self._type += "->BoxSect"
         
@@ -389,17 +392,17 @@ class BoxSect(RCCrossSect):
 
     
     def _OpsSectBuild(self):
-        con = OpsObject.OpsConcrete(*self._CoreCon.val)
+        con = OpsObject.OpsConcrete02(*self._CoreCon.val)
         return OpsObject.OpsBoxSection(self._SectAttr['area'], 
                             self._SectAttr['inertia_x'], self._SectAttr['inertia_y'], self._SectAttr['inertia_j'], 
                             con)
 
     def _SectAttrBuild(self):
-        paras = self.Paras
+        paras:Paras.BoxSectParas = self.Paras
         if self.Paras.check() != True:
             raise Exception("Parameters Exists Zero")
         # * 根据箱梁参数、坐标原点、法向轴，建立箱梁截面
-        if len(self.orig_point) != 3 or len(self.N_axis) != 3:
+        if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
             raise Exception("Error length of orig_point or N_axis, should be 3")
         # *                            ^z
         # *                            |
@@ -415,52 +418,54 @@ class BoxSect(RCCrossSect):
         # *                            |
         points = np.array(
             [
-                [0, -paras.upper_width / 2, 0],
-                [0, paras.upper_width / 2, 0],
-                [0, paras.upper_width / 2, -paras.upper_thick],
-                [0, paras.down_width / 2, -paras.upper_thick],
-                [0, paras.down_width / 2, -paras.height],
-                [0, -paras.down_width / 2, -paras.height],
-                [0, -paras.down_width / 2, -paras.upper_thick],
-                [0, -paras.upper_width / 2, -paras.upper_thick],
-                [0, -paras.down_width / 2 + paras.web_thick, -paras.upper_thick],
-                [0, paras.down_width / 2 - paras.web_thick, -paras.upper_thick],
-                [0, paras.down_width / 2 - paras.web_thick, -paras.height + paras.down_thick],
-                [0, -paras.down_width / 2 + paras.web_thick, -paras.height + paras.down_thick]
+                [0, -paras.upper_W / 2, 0],
+                [0, paras.upper_W / 2, 0],
+                [0, paras.upper_W / 2, -paras.upper_T],
+                [0, paras.down_W / 2, -paras.upper_T],
+                [0, paras.down_W / 2, -paras.H],
+                [0, -paras.down_W / 2, -paras.H],
+                [0, -paras.down_W / 2, -paras.upper_T],
+                [0, -paras.upper_W / 2, -paras.upper_T],
+                [0, -paras.down_W / 2 + paras.web_T, -paras.upper_T],
+                [0, paras.down_W / 2 - paras.web_T, -paras.upper_T],
+                [0, paras.down_W / 2 - paras.web_T, -paras.H + paras.down_T],
+                [0, -paras.down_W / 2 + paras.web_T, -paras.H + paras.down_T]
             ]
         )
         yz = np.hsplit(points, [1])[1]
         yz_out = yz[:8,]
         yz_in = yz[8:,]
         arr = xsect.multi_section_summary([yz_out], subtract=[yz_in])
-        # * X轴
-        x1, y1, z1 = (1.0, 0.0, 0.0)
-        # * 新X轴
-        x2, y2, z2 = (float(x) for x in self._N_axis)
-        # * 绕Z转动，计算x-y平面的角度变化
-        try:
-            cos_theta = (x1 * x2 + y1 * y2) / math.sqrt(x2 * x2 + y2 * y2)
-            theta = np.arccos(cos_theta)
-            if y2 < 0:
-                theta = 2 * np.pi - theta
-            Trans_Zaxis = np.array(
-                [
-                    [np.cos(theta), np.sin(theta), 0],
-                    [-np.sin(theta), np.cos(theta), 0],
-                    [0, 0, 1],
-                ]
-            )
-            points = np.matmul(points, Trans_Zaxis)
-        except:
-            pass
-        # * 绕Y转动，计算x-z平面的角度变化
-        try:
-            cos_theta = (x1 * x2 + z1 * z2) / math.sqrt(x2 * x2 + z2 * z2)
-            theta = -np.arccos(cos_theta)
-        except:
-            pass
-        # * 平移到orig_point
-        points = points + self._orig_point
+        # # * X轴
+        # x1, y1, z1 = (1.0, 0.0, 0.0)
+        # # * 新X轴
+        # x2, y2, z2 = (float(x) for x in self._N_axis)
+        # # * 绕Z转动，计算x-y平面的角度变化
+        # try:
+        #     cos_theta = (x1 * x2 + y1 * y2) / math.sqrt(x2 * x2 + y2 * y2)
+        #     theta = np.arccos(cos_theta)
+        #     if y2 < 0:
+        #         theta = 2 * np.pi - theta
+        #     Trans_Zaxis = np.array(
+        #         [
+        #             [np.cos(theta), np.sin(theta), 0],
+        #             [-np.sin(theta), np.cos(theta), 0],
+        #             [0, 0, 1],
+        #         ]
+        #     )
+        #     points = np.matmul(points, Trans_Zaxis)
+        # except:
+        #     pass
+        # # * 绕Y转动，计算x-z平面的角度变化
+        # try:
+        #     cos_theta = (x1 * x2 + z1 * z2) / math.sqrt(x2 * x2 + z2 * z2)
+        #     theta = -np.arccos(cos_theta)
+        # except:
+        #     pass
+        # # * 平移到orig_point
+        # points = points + self._orig_point
+        points = UtilTools.PointsTools.RotatePointsByPoints(points, (1, 0, 0), self._N_axis)
+        points += self._OrigPoint
         return arr, points
 
     def _RebarsDistrBuild(self, R):
@@ -489,7 +494,7 @@ class BoxSect(RCCrossSect):
         return self._N_axis
     @N_aixs.setter
     def N_aixs(self, newVal):
-        if type(newVal) is type(self._N_aixs):
+        if type(newVal) is type(self._N_axis):
             self._N_axis = newVal
             self._SectReBuild()
         else:
@@ -497,11 +502,12 @@ class BoxSect(RCCrossSect):
     
     @property
     def OrigPoint(self):
-        return self._orig_point
+        
+        return self._OrigPoint
     @OrigPoint.setter
     def OrigPoint(self, newVal):
-        if type(newVal) is type(self._orig):
-            self._orig_point = newVal
+        if type(newVal) is type(self._OrigPoint):
+            self._OrigPoint = newVal
             self._SectReBuild()
         else:
             raise Exception("Wrong Paras")
@@ -530,32 +536,32 @@ class BoxSect(RCCrossSect):
         """
         return [self._Paras, self._N_axis, self._orig_point, self._Points, self._Arr, self._m, self._OpsSect]
         """
-        return [self._Paras, self._N_axis, self._orig_point, self._Points, self._SectAttr, self._ConCore, self._OpsSect]
+        return [self._Paras, self._N_axis, self._OrigPoint, self._Points, self._SectAttr, self._ConCore, self._OpsSect]
     
     def plotSect(self, ax3d):
-        if self.check():
-            x, y, z = np.hsplit(self._Points, [1, 2])
-            x = x.flatten()
-            y = y.flatten()
-            z = z.flatten()
-            ax3d.plot(
-                np.hstack((x[:8], x[0])),
-                np.hstack((y[:8], y[0])),
-                np.hstack((z[:8], z[0])),
-            )
-            ax3d.plot(
-                np.hstack((x[8:], x[8])),
-                np.hstack((y[8:], y[8])),
-                np.hstack((z[8:], z[8])),
-            )
-            orig_point = (self._Points[0] + self._Points[1]) / 2
-            ax3d.plot(
-                [orig_point[0], orig_point[0] + self.N_axis[0]],
-                [orig_point[1], orig_point[1] + self.N_axis[1]],
-                [orig_point[2], orig_point[2] + self.N_axis[2]],
-            )
-        else:
-            raise Exception("Exist Undefined Member")
+        # if self.check():
+        x, y, z = np.hsplit(self._Points, [1, 2])
+        x = x.flatten()
+        y = y.flatten()
+        z = z.flatten()
+        ax3d.plot(
+            np.hstack((x[:8], x[0])),
+            np.hstack((y[:8], y[0])),
+            np.hstack((z[:8], z[0])),
+        )
+        ax3d.plot(
+            np.hstack((x[8:], x[8])),
+            np.hstack((y[8:], y[8])),
+            np.hstack((z[8:], z[8])),
+        )
+        orig_point = (self._Points[0] + self._Points[1]) / 2
+        ax3d.plot(
+            [orig_point[0], orig_point[0] + self._N_axis[0]],
+            [orig_point[1], orig_point[1] + self._N_axis[1]],
+            [orig_point[2], orig_point[2] + self._N_axis[2]],
+        )
+        # else:
+        #     raise Exception("Exist Undefined Member")
 
 class SRoundRCSect(RCCrossSect):
     __slots__ = []
@@ -577,7 +583,7 @@ class SRoundRCSect(RCCrossSect):
 
     def _RebarsDistrBuild(self, R):
         
-        if len(self._OrigPoints) != 3 or len(self._N_axis) != 3:
+        if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
             raise Exception("Error length of orig_point or N_axis, should be 3")
 
         Rebars: Paras.SectRebarDistrParas = Paras.SectRebarDistrParas(
@@ -623,7 +629,7 @@ class HRoudRCSect(RCCrossSect):
         return attr, points
         
     def _RebarsDistrBuild(self, R):
-        if len(self._OrigPoints) != 3 or len(self._N_axis) != 3:
+        if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
             raise Exception("Error length of orig_point or N_axis, should be 3")
 
         Rebars: Paras.SectRebarDistrParas = Paras.SectRebarDistrParas(

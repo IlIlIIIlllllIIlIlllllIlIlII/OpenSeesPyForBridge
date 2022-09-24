@@ -1,5 +1,5 @@
 #%%
-from tkinter.tix import Tree
+from base64 import standard_b64decode
 import numpy as np
 import math
 from scipy.spatial.transform import Rotation as R
@@ -134,11 +134,14 @@ class PointsTools:
         """
         向量的夹角
         """
-        xnorm = PointsTools.NormOfvect(x)
-        ynorm = PointsTools.NormOfvect(y)
-        cos = x[0] * y[0] + x[1] * y[1] + x[2] * y[2] / ynorm / xnorm
+        if PointsTools.IsVectsLegal(x) and PointsTools.IsVectsLegal(y):
+            xnorm = PointsTools.NormOfvect(x)
+            ynorm = PointsTools.NormOfvect(y)
+            cos = (x[0] * y[0] + x[1] * y[1] + x[2] * y[2]) / ynorm / xnorm
 
-        return np.arccos(cos)
+            return np.arccos(cos)
+        else:
+            raise Exception("Ilegal Vector")
 
     @staticmethod
     def vectNormalize(x:tuple[float]) -> np.ndarray:
@@ -160,24 +163,19 @@ class PointsTools:
             planeVect1 = np.array(planeVect1)
         if type(planeVect2) is not np.ndarray:
             planeVect2 = np.array(planeVect2)
-        a = np.vstack([planeVect1, planeVect2, np.array([0, 0, 1])])
-        # a = np.array(
-        #     [planeVect1,
-        #     planeVect2,
-        #     (0, 0, 1)]
-        # )
-        b = np.array(
-            [0, 0, 1]
-        )
         
-        c = np.linalg.solve(a, b)
+        NormalVect = np.cross(planeVect1, planeVect2)
 
-        c = PointsTools.vectNormalize(c)
+        NormalVect = PointsTools.vectNormalize(NormalVect)
 
-        return c
+        return NormalVect
+
     
     @staticmethod
     def vectPlaneAngle(vect:tuple[float, ...], planeVect1:tuple[float, ...], planeVect2:tuple[float, ...]) -> float:
+        """
+        向量与截面的夹角
+        """
         if type(planeVect1) is not np.ndarray:
             planeVect1 = np.array(planeVect1)
         if type(planeVect2) is not np.ndarray:
@@ -190,18 +188,30 @@ class PointsTools:
         return np.pi/2-theta
     
     @staticmethod
-    def IsVectsLegal(vectlist:np.ndarray):
+    def IsVectsLegal(vectlist:np.ndarray) -> bool:
+        """
+        判断向量是否合法
+        """
+
         if vectlist is not np.ndarray:
             vectlist = np.array(vectlist)
-        
-        if vectlist.shape == (1, 3):
-            Util.isOnlyHas(vectlist, 0)
-        for vect in vectlist:
-            ...
 
+        if len(vectlist.shape) == 1:
+            vectlist = vectlist.reshape(1, 3)
+
+        if vectlist.shape[-1] != 3:
+            return False
+
+        for i in vectlist.tolist():
+            if i == [0, 0, 0]:
+                return False
+            return True
 
     @staticmethod
     def IsVectInPlane(vect:np.ndarray, planeVect1:np.ndarray, planeVect2:np.ndarray) -> bool:
+        """
+        向量是否在平面中
+        """
         
         normalVect = PointsTools.NormalVectOfPlane(planeVect1, planeVect2)
 
@@ -213,6 +223,9 @@ class PointsTools:
 
     @staticmethod
     def ProjectVectInPlane(vect:np.ndarray, planeVect1:np.ndarray, planeVect2:np.ndarray):
+        """
+        将向量投影到平面上
+        """
         if type(vect) is not np.ndarray:
             vect = np.array(vect)
         if type(planeVect1) is not np.ndarray:
@@ -226,6 +239,9 @@ class PointsTools:
 
     @staticmethod
     def TransXsectPointTo3D(point:np.ndarray):
+        """
+        将xsect模块生成的2d点转换为3d
+        """
 
         if type(point) is not np.ndarray or point.shape[-1] != 3:
             raise Exception("Wrong Params, point should be produced by Xsect")
@@ -234,6 +250,51 @@ class PointsTools:
         p3d = np.hstack(zero, point)
         
         return p3d
+
+    X_AXIS = np.array([1, 0, 0])
+    Y_AXIS = np.array([0, 1, 0])
+    Z_AXIS = np.array([0, 0, 1])
+
+    XY_PLANE = YX_PLANE = [X_AXIS, Y_AXIS]
+    XZ_PLANE = ZX_PLANE = [X_AXIS, Z_AXIS]
+    YZ_PLANE = ZY_PLANE = [Y_AXIS, Z_AXIS]
+
+    COORDSYS = np.array([X_AXIS, Y_AXIS, Z_AXIS])
+
+    @staticmethod
+    def RotatePointsByPoints(Points:list[float], source:tuple[float], target:tuple[float], coordsys=False) -> tuple[np.ndarray, np.ndarray]:
+        """
+        根据起始点和终点, 旋转点集, 返回会旋转后的点集和旋转后的坐标轴
+        采用4元数描述点的转动
+        """
+        if type(source) is not np.ndarray:
+            source = np.array(source)
+        if type(target) is not np.ndarray:
+            target = np.array(target)
+        if type(Points) is not np.ndarray:
+            Points = np.array(Points)
+            
+        theta = PointsTools.vectAngle(source , target) / 2      
+        NormalAXis = np.cross(source, target)
+        NormalAXis = PointsTools.vectNormalize(NormalAXis)
+
+        sinA = np.sin(theta)
+        cosA = np.cos(theta)
+        quat = (NormalAXis[0] * sinA, NormalAXis[1] * sinA, NormalAXis[2] * sinA, cosA)
+        rot = R.from_quat(quat)
+
+        # if coordsys:
+        #     return (rot.apply(Points), rot.apply(source), rot.apply(PointsTools.COORDSYS))
+        # else:
+        #     return (rot.apply(Points), rot.apply(source))
+        if coordsys:
+            return (rot.apply(Points), rot.apply(PointsTools.COORDSYS))
+        else:
+            return rot.apply(Points)
+
+    @staticmethod
+    def RotatePoinsByVects(points:np.ndarray, source:np.ndarray, target:np.ndarray, coordsys:bool=False):
+        return PointsTools.RotatePointsByPoints(points, source, target, coordsys)
 
     @staticmethod
     def RotatePoints(Points:list[float], NewXAxis:tuple[float, ...], NewZAxis:tuple[float, ...]):
@@ -246,8 +307,8 @@ class PointsTools:
         YAxis = np.array((0, 1, 0))
         ZAxis = np.array((0, 0, 1))
         # * 绕Z转动，计算x-y平面的角度变化
-        theta = PointsTools.vectPlaneAngle(NewXAxis, XAxis, ZAxis)
-        if Util.TOLLT(NewXAxis[0], XAxis):
+        theta = PointsTools.vectAngle(PointsTools.ProjectVectInPlane(NewXAxis, XAxis, YAxis), XAxis)
+        if Util.TOLGT(NewXAxis[1], XAxis[1]):
             theta = 2 * np.pi - theta
 
         rat = R.from_euler('z', (theta))
@@ -260,7 +321,7 @@ class PointsTools:
         ZAxis = rat.apply(ZAxis)
 
         # * 绕Y转动，计算x-z平面的角度变化
-        theta = PointsTools.vectPlaneAngle(NewXAxis, XAxis, YAxis)
+        theta = PointsTools.vectAngle(PointsTools.ProjectVectInPlane(NewXAxis, XAxis, ZAxis), XAxis)
         if Util.TOLLT(XAxis[2], 0):
             theta = 2 * np.pi - theta
 
@@ -411,8 +472,8 @@ class Util:
             if len(obj.shape) != len(item.shape) or obj.shape[-1] != obj.shape[-1]:
                 raise Exception("wrong paras")
 
-            for i in obj:
-                if i not in item:
+            for i in obj.tolist():
+                if i not in item.tolist():
                     return False
             return True
 
