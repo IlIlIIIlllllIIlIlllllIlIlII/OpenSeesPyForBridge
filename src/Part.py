@@ -578,6 +578,7 @@ class SRoundRCSect(RCCrossSect):
         sectAttr = xsect.round_summary(d, step = step)
         points = xsect.round_points(d, step = step)
         points = UtilTools.PointsTools.TransXsectPointTo3D(points)
+        points = UtilTools.PointsTools.RotatePoinsByVects(points, UtilTools.PointsTools.X_AXIS, self._N_axis)
 
         return sectAttr, points
 
