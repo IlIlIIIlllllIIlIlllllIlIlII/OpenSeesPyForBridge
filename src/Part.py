@@ -626,6 +626,7 @@ class HRoudRCSect(RCCrossSect):
         attr = xsect.round_summary(d, t, step = step)
         points = xsect.round_points(d, t, step = step)
         points = UtilTools.PointsTools.TransXsectPointTo3D(points)
+        points = UtilTools.PointsTools.RotatePoinsByVects(points, UtilTools.PointsTools.X_AXIS, self._N_axis)
 
         return attr, points
         
@@ -704,41 +705,44 @@ class HRectRCSect(RCCrossSect):
         xy_out = xy[:4]
         xy_in = xy[4:]
         arr = xsect.multi_section_summary([xy_out], subtract=[xy_in])
-        x1, y1, z1 = (0, 0, 1)
-        x2, y2, z2 = (float(x) for x in self._N_axis)
-        # * 绕X轴偏转, 计算y-z平面的夹角
-        try:
-            cos_theta = (y1 * y2 + z1 * z2) / (math.sqrt(y2 * y2 + z2 * z2))
-            theta = np.arccos(cos_theta)
-            if y2 > 0:
-                theta = 2 * np.pi - theta
-            Trans_Xaxis = np.array(
-                [
-                    [1, 0, 0],
-                    [0, np.cos(theta), np.sin(theta)],
-                    [0, -np.sin(theta), np.cos(theta)],
-                ]
-            )
-            points = np.matmul(points, Trans_Xaxis)
-        except:
-            pass
-        # * 绕y轴偏转，计算x-z平面夹角
-        try:
-            cos_theta = (x1 * x2 + z1 * z2) / math.sqrt(x2 * x2 + z2 * z2)
-            theta = np.arccos(cos_theta)
-            if x2 < 0:
-                theta = 2 * np.pi - theta
-            Trans_Yaxis = np.array(
-                [
-                    [np.cos(theta), 0, -np.sin(theta)],
-                    [0, 1, 0],
-                    [np.sin(theta), 0, np.cos(theta)],
-                ]
-            )
-            points = np.matmul(points, Trans_Yaxis)
-            points = points + self._OrigPoints
-        except:
-            pass
+        points = UtilTools.PointsTools.RotatePointsByPoints(points, (1, 0, 0), self._N_axis)
+        points += self._OrigPoint
+        return arr, points
+        # x1, y1, z1 = (0, 0, 1)
+        # x2, y2, z2 = (float(x) for x in self._N_axis)
+        # # * 绕X轴偏转, 计算y-z平面的夹角
+        # try:
+        #     cos_theta = (y1 * y2 + z1 * z2) / (math.sqrt(y2 * y2 + z2 * z2))
+        #     theta = np.arccos(cos_theta)
+        #     if y2 > 0:
+        #         theta = 2 * np.pi - theta
+        #     Trans_Xaxis = np.array(
+        #         [
+        #             [1, 0, 0],
+        #             [0, np.cos(theta), np.sin(theta)],
+        #             [0, -np.sin(theta), np.cos(theta)],
+        #         ]
+        #     )
+        #     points = np.matmul(points, Trans_Xaxis)
+        # except:
+        #     pass
+        # # * 绕y轴偏转，计算x-z平面夹角
+        # try:
+        #     cos_theta = (x1 * x2 + z1 * z2) / math.sqrt(x2 * x2 + z2 * z2)
+        #     theta = np.arccos(cos_theta)
+        #     if x2 < 0:
+        #         theta = 2 * np.pi - theta
+        #     Trans_Yaxis = np.array(
+        #         [
+        #             [np.cos(theta), 0, -np.sin(theta)],
+        #             [0, 1, 0],
+        #             [np.sin(theta), 0, np.cos(theta)],
+        #         ]
+        #     )
+        #     points = np.matmul(points, Trans_Yaxis)
+        #     points = points + self._OrigPoints
+        # except:
+        #     pass
     
         return arr, points
 
