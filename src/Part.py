@@ -53,6 +53,10 @@ class BridgeNode(Comp.Parts):
         else:
             raise Exception("Wrong Paras")
     
+    @property
+    def OpsNode(self):
+        return self._OpsNode
+    
     def addMass(self, mass:float, massDis:list=[1, 1, 1, 0, 0, 0]):
         self._mass += mass
         self._OpsMassList.append(OpsObject.OpsMass(self._OpsNode.uniqNum, mass, massDis))
@@ -109,184 +113,6 @@ class BridgeFixedBoundary(Boundary):
     @property
     def val(self):
         return [self._node, self._OpsFix]
-class Segment(Comp.Parts):
-    @abstractmethod
-    def __init__(self, node_i:BridgeNode, node_j:BridgeNode, 
-                       SectParas_i, SectParas_j,
-                       power:float, name=""):
-        super(Segment, self).__init__(name)
-        self._Ni = node_i
-        self._Nj = node_j
-
-        self._Secti = SectParas_i
-        self._Sectj = SectParas_j
-
-        self._p = power
-        self._l = UtilTools.Util.PointsDis(self._Ni.point, self._Nj)
-# TODO
-class BridgeLineBoxGirderSeg(Segment):
-    __slots__ = ['_Ni', '_Nj', '_Secti', '_Sectj', '_p', '_l', '_m', '_localZ',
-                '_BridgeNodeList', '_GirderSectList', '_GirderElementList', '_eleLengthList']
-    @Comp.CompMgr()
-    def __init__(self, node_i:BridgeNode, node_j:BridgeNode, 
-                       SectParas_i:Paras.BoxSectParas, SectParas_j:Paras.BoxSectParas, 
-                       m:Paras.ConcreteParas,
-                       localZ:tuple[int],
-                       eleLenList:list[float],
-                       power:float, name=""):
-
-        super(BridgeLineBoxGirderSeg, self).__init__(name)
-        self._Ni = node_i
-        self._Nj = node_j
-
-        self._Secti = SectParas_i
-        self._Sectj = SectParas_j
-        self._m = m
-        self._p = power
-        self._l = UtilTools.PointsTools.PointsDist(self._Ni.point, self._Nj)
-        self._Z = localZ
-
-        self._eleLengthList:list[float] = eleLenList
-
-        self._BridgeNodeList, self._GirderSectList, self._GirderElementList = self._Build()
-
-    def _Build(self):
-        if UtilTools.Util.TOLEQ(sum(self._eleLengthList), self._l) and self._eleLengthList is not None:
-            poits = UtilTools.PointsTools.LinePointBuilder(self._Ni, self._Nj, self._eleLengthList)
-
-            upper_W = UtilTools.SegmentTools.PowerParasBuilder(self._Secti.upper_W, self._Sectj.upper_W, self._l, 1, self._eleLengthList)
-            upper_T = UtilTools.SegmentTools.PowerParasBuilder(self._Secti.upper_T, self._Sectj.upper_T, self._l, 1, self._eleLengthList)
-
-            down_W =  UtilTools.SegmentTools.PowerParasBuilder(self._Secti.down_W, self._Sectj.down_W, self._l, 1, self._eleLengthList)
-            down_T =  UtilTools.SegmentTools.PowerParasBuilder(self._Secti.down_T, self._Sectj.down_T, self._l, 1, self._eleLengthList)
-
-            web_T =  UtilTools.SegmentTools.PowerParasBuilder(self._Secti.web_T, self._Sectj.web_T, self._l, 1, self._eleLengthList)
-
-            h =  UtilTools.SegmentTools.PowerParasBuilder(self._Secti, self._Sectj, self._l, self._p, self._eleLengthList)
-            N_axis =  UtilTools.PointsTools.vectSub(self._Nj.point, self._Ni.point)
-            l_paras:list[Paras.BoxSectParas] = []
-            l_node:list[BridgeNode] = []
-            l_sect:list[BoxSect] = []
-            l_element:list[OpsObject.OpsElement] = []
-            
-            for p in poits:
-                node = BridgeNode(p, 0.0)
-                l_node.append(node)
-
-            for uW, dW, _h, uT, dT, wT in zip(upper_W, down_W, h, upper_T, down_T, web_T):
-                paras = Paras.BoxSectParas(uW, dW, _h, uT, dT, wT)
-                l_paras.append(paras)
-            
-            for i in range(len(self._eleLengthList)):
-                paras = UtilTools.SectTools.MeanSectParas(l_paras[i], l_paras[i+1])
-                paras = Paras.BoxSectParas(*paras)
-                sect = BoxSect(paras, poits[i], N_axis, self._m)
-                l_sect.append(sect)
-                mass = sect.SectAttr['area'] * self._eleLengthList[i] * self._m.densty
-                l_node[i].addMass(mass/2)
-                l_node[i+1].addMass(mass/2)
-                ele = OpsObject.OpsEBCElement(self._BridgeNodeList[i].xyz, 
-                                    self._BridgeNodeList[i].xyz,
-                                    self._GirderSectList[i],
-                                    self._Z
-                                    )
-
-                l_element.append(ele) 
-                return l_node, l_sect, l_element
-
-    @property
-    def NodeI(self):
-        return self._Ni
-    @NodeI.setter
-    def NodeI(self, newVal):
-        if type(newVal) is type(self._Ni):
-            self._Ni = newVal
-        else:
-            raise Exception("Wrong Paras")
-     
-    @property
-    def NodeJ(self):
-        return self._Nj
-    @NodeJ.setter
-    def NodeJ(self, newVal):
-        if type(newVal) is type(self._Nj):
-            self._Nj = newVal
-        else:
-            raise Exception("Wrong Paras")
-     
-    @property
-    def SectI(self):
-        return self._Secti
-    @SectI.setter
-    def SectI(self, newVal):
-        if type(newVal) is type(self._Secti):
-            self._Secti = newVal
-        else:
-            raise Exception("Wrong Paras")
-    @property
-    def SectJ(self):
-        return self._Sectj
-    @SectJ.setter
-    def SectJ(self, newVal):
-        if type(newVal) is type(self._Sectj):
-            self._Sectj = newVal
-        else:
-            raise Exception("Wrong Paras")
-    
-    @property
-    def Power(self):
-        return self._p
-    @Power.setter
-    def Power(self, newVal):
-        if type(newVal) is type(self._p):
-            self._p = newVal
-        else:
-            raise Exception("Wrong Paras")
-    
-    def _SectReBuild(self):
-        ...
-
-# TODO
-class PierPart(Comp.Parts):
-    pass
-
-#TODO
-class BridgeModel(Comp.Parts):
-    @Comp.CompMgr()
-    def __init__(self, name=""):
-        super(BridgeModel, self).__init__(name)
-        self._type += "BridgeParts"
-        self._BridgeParas = None
-        self._Materials: list = []
-        self._Boundaries: list = []
-        self._Girder = None
-        self._Pier: list = []
-
-    def SetBridgeAttribution(self, *args):
-        for arg in args:
-            if isinstance(arg, Paras.BridgeParas):
-                self._BridgeParas = arg
-            elif isinstance(arg, Paras.MaterialParas):
-                self._Materials.append(arg)
-            elif isinstance(arg, Boundary):
-                self._Boundaries.append(arg)
-            elif isinstance(arg, BridgeLineBoxGirderSeg):
-                self._Girder = arg
-            elif isinstance(arg, PierPart):
-                self._Pier.append(arg)
-            else:
-                print('Wrong Type of argument: "' + arg + '"')
-                pass
-    def check(self):
-        if (self._BridgeParas is not Paras.BoxSectParas
-            or len(self._Materials) == 0
-            or len(self._Boundaries) == 0
-            or self._Girder is not BridgeLineBoxGirderSeg
-            or len(self._Pier) == 0
-        ):
-            return False
-        else:
-            return True
 
 # * 截面类, 继承自构件类，派生出 主梁截面、桥墩截面
 class CrossSection(Comp.Parts, metaclass=ABCMeta):
@@ -608,7 +434,7 @@ class SRoundRCSect(RCCrossSect):
     def plotSect(self, Axe3d):
         ...
 # * 空心圆截面桥墩
-class HRoudRCSect(RCCrossSect):
+class HRoundRCSect(RCCrossSect):
     __slots__ = []
 
     @Comp.CompMgr()
@@ -654,6 +480,16 @@ class HRoudRCSect(RCCrossSect):
         #TODO
         ...
 
+    @property
+    def SectAttr(self):
+        return self._SectAttr
+    @SectAttr.setter
+    def SectAttr(self, newVal):
+        if type(newVal) is type(self._SectAttr):
+            self._SectAttr = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
 
 # * 空心矩形截面
 class HRectRCSect(RCCrossSect):
@@ -877,3 +713,518 @@ class HRectRCSect(RCCrossSect):
         else:
             raise Exception("Exist Undefined Member")
 
+class Segment(Comp.Parts):
+    @abstractmethod
+    def __init__(self, node_i:BridgeNode, node_j:BridgeNode, 
+                       SectParas_i:Paras.SectParas, SectParas_j:Paras.SectParas,
+                       power:float,
+                       localZ:tuple[float],
+                       eleLengthList:list[float],
+                       name=""):
+        super(Segment, self).__init__(name)
+        self._Ni:BridgeNode = node_i
+        self._Nj:BridgeNode = node_j
+
+        self._Secti:Paras.SectParas = SectParas_i
+        self._Sectj:Paras.SectParas = SectParas_j
+
+        self._p:float = power
+        self._localXAxis:np.ndarray = UtilTools.PointsTools.vectSub(self._Ni.point, self._Nj.point)
+        self._localZAxis:np.ndarray = np.array(localZ)
+
+        self._l = UtilTools.Util.PointsDis(self._Ni.point, self._Nj.point)
+
+        self._eleLengthList:list[float] = eleLengthList
+        self._BridgeNodeList, self._SegSectList, self._SegMassList, self._SegElementList = self._Build()
+        
+    @abstractmethod
+    def _Build():
+        ...
+    @property
+    def ELeList(self):
+        return self._SegElementList
+    @ELeList.setter
+    def ELeList(self, newVal):
+        if type(newVal) is type(self._SegElementList):
+            self._SegElementList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def NodeList(self):
+        return self._BridgeNodeList
+    @NodeList.setter
+    def NodeList(self, newVal):
+        if type(newVal) is type(self._BridgeNodeList):
+            self._BridgeNodeList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def MassList(self):
+        return self._SegMassList
+    @MassList.setter
+    def MassList(self, newVal):
+        if type(newVal) is type(self._SegMassList):
+            self._SegMassList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    @property
+    def SectList(self):
+        return self._SegSectList
+    @SectList.setter
+    def SectList(self, newVal):
+        if type(newVal) is type(self._SegSectList):
+            self._SegSectList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    @property
+    def EleLength(self):
+        return self._eleLengthList
+    @EleLength.setter
+    def EleLength(self, newVal):
+        if type(newVal) is type(self._eleLengthList):
+            self._eleLengthList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+
+class LineBoxSeg(Segment):
+    __slots__ = []
+    @property
+    def MassList(self):
+        return self._SegMassList
+    @MassList.setter
+    def MassList(self, newVal):
+        if type(newVal) is type(self._SegMassList):
+            self._SegMassList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    @Comp.CompMgr()
+    def __init__(self, node_i:BridgeNode, node_j:BridgeNode, 
+                       SectParas_i:Paras.BoxSectParas, SectParas_j:Paras.BoxSectParas, 
+                       con:Paras.ConcreteParas,
+                       localZ:tuple[int],
+                       eleLengthList:list[float],
+                       power:float, name=""):
+
+        super(LineBoxSeg, self).__init__(node_i, node_j, SectParas_i, SectParas_j, power, localZ, eleLengthList, name)
+        self._con = con
+
+    def _Build(self):
+        if UtilTools.Util.TOLEQ(sum(self._eleLengthList), self._l) and self._eleLengthList is not None:
+            points = UtilTools.PointsTools.LinePointBuilder(self._Ni, self._Nj, self._eleLengthList)
+            SectI:Paras.BoxSectParas = self._Secti
+            SectJ:Paras.BoxSectParas = self._Sectj
+
+            upper_W = UtilTools.SegmentTools.PowerParasBuilder(SectI.upper_W, SectJ.upper_W, self._l, 1, self._eleLengthList)
+            upper_T = UtilTools.SegmentTools.PowerParasBuilder(SectI.upper_T, SectJ.upper_T, self._l, 1, self._eleLengthList)
+
+            down_W =  UtilTools.SegmentTools.PowerParasBuilder(SectI.down_W, SectJ.down_W, self._l, 1, self._eleLengthList)
+            down_T =  UtilTools.SegmentTools.PowerParasBuilder(SectI.down_T, SectJ.down_T, self._l, 1, self._eleLengthList)
+
+            web_T =  UtilTools.SegmentTools.PowerParasBuilder(SectI.web_T, SectJ.web_T, self._l, 1, self._eleLengthList)
+
+            h =  UtilTools.SegmentTools.PowerParasBuilder(SectI.H, SectJ.H, self._l, self._p, self._eleLengthList)
+            N_axis =  UtilTools.PointsTools.vectSub(self._Nj.point, self._Ni.point)
+            l_paras:list[Paras.BoxSectParas] = []
+            l_node:list[BridgeNode] = []
+            l_sect:list[BoxSect] = []
+            l_element:list[OpsObject.OpsElement] = []
+            l_mass:list[float] = []
+            
+            for p in points:
+                node = BridgeNode(p, 0.0)
+                l_node.append(node)
+
+            for uW, dW, _h, uT, dT, wT in zip(upper_W, down_W, h, upper_T, down_T, web_T):
+                paras = Paras.BoxSectParas(uW, dW, _h, uT, dT, wT)
+                l_paras.append(paras)
+            
+            for i in range(len(self._eleLengthList)):
+                paras = UtilTools.SectTools.MeanSectParas(l_paras[i], l_paras[i+1])
+                paras = Paras.BoxSectParas(*paras)
+                sect = BoxSect(paras, points[i], N_axis, self._con)
+                l_sect.append(sect)
+                mass = sect.SectAttr['area'] * self._eleLengthList[i] * self._con.densty
+                l_mass.append(mass)
+                l_node[i].addMass(mass/2)
+                l_node[i+1].addMass(mass/2)
+                ele = OpsObject.OpsEBCElement(l_node[i].point, 
+                                    l_node[i+1].point,
+                                    l_sect[i],
+                                    self._localZAxis
+                                    )
+
+                l_element.append(ele) 
+                return l_node, l_sect, l_mass, l_element
+
+    @property
+    def NodeI(self):
+        return self._Ni
+    @NodeI.setter
+    def NodeI(self, newVal):
+        if type(newVal) is type(self._Ni):
+            self._Ni = newVal
+        else:
+            raise Exception("Wrong Paras")
+     
+    @property
+    def NodeJ(self):
+        return self._Nj
+    @NodeJ.setter
+    def NodeJ(self, newVal):
+        if type(newVal) is type(self._Nj):
+            self._Nj = newVal
+        else:
+            raise Exception("Wrong Paras")
+     
+    @property
+    def SectI(self):
+        return self._Secti
+    @SectI.setter
+    def SectI(self, newVal):
+        if type(newVal) is type(self._Secti):
+            self._Secti = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def SectJ(self):
+        return self._Sectj
+    @SectJ.setter
+    def SectJ(self, newVal):
+        if type(newVal) is type(self._Sectj):
+            self._Sectj = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    @property
+    def Power(self):
+        return self._p
+    @Power.setter
+    def Power(self, newVal):
+        if type(newVal) is type(self._p):
+            self._p = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def ElementList(self):
+        return self._GirderElementList
+    @ElementList.setter
+    def ElementList(self, newVal):
+        if type(newVal) is type(self.val):
+            self._GirderElementList= newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    def _SectReBuild(self):
+        ...
+
+    @property
+    def ELeList(self):
+        return self._SegElementList
+    @ELeList.setter
+    def ELeList(self, newVal):
+        if type(newVal) is type(self._SegElementList):
+            self._SegElementList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def NodeList(self):
+        return self._BridgeNodeList
+    @NodeList.setter
+    def NodeList(self, newVal):
+        if type(newVal) is type(self._BridgeNodeList):
+            self._BridgeNodeList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def MassList(self):
+        return self._SegMassList
+    @MassList.setter
+    def MassList(self, newVal):
+        if type(newVal) is type(self._SegMassList):
+            self._SegMassList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    @property
+    def SectList(self):
+        return self._SegSectList
+    @SectList.setter
+    def SectList(self, newVal):
+        if type(newVal) is type(self._SegSectList):
+            self._SegSectList = newVal
+        else:
+            raise Exception("Wrong Paras")
+# 
+class LineHRoundSeg(Segment):
+    @Comp.CompMgr()
+    def __init__(self, node_i: BridgeNode, node_j: BridgeNode, SectParas_i:Paras.HRoundSectParas, SectParas_j:Paras.HRoundSectParas, ConCore:Paras.ConcreteParas, ConCover:Paras.ConcreteParas, Rebar:Paras.SteelParas, localZ: tuple[float], eleLengthList: list[float], RebarRList:list[float]=None, RebarDistrParasList:list[Paras.SectRebarDistrParas]=None, name=""):
+        super().__init__(node_i, node_j, SectParas_i, SectParas_j, 1, localZ, eleLengthList, name)
+        self._CoreCon = ConCore
+        self._CoverCon = ConCover
+        self._Rebar = Rebar
+
+        if RebarDistrParasList and len(RebarDistrParasList) == len(eleLengthList):
+            print("INFO:As 'RebarDistrParasList' was used, 'RebarRList' is ingored")
+            self._R = RebarDistrParasList
+        elif RebarRList and len(RebarRList) == len(eleLengthList):
+            self._R = RebarRList
+        else:
+            raise Exception("Wrong Params, RebarDistParasList and RebarRList can not be None at same time, and the length should be same with eleLengthList.")
+
+    def _Build(self):
+        if UtilTools.Util.TOLEQ(sum(self._eleLengthList), self._l) and self._eleLengthList is not None:
+            poits = UtilTools.PointsTools.LinePointBuilder(self._Ni, self._Nj, self._eleLengthList)
+            SectI:Paras.HRoundSectParas = self._Secti
+            SectJ:Paras.HRoundSectParas = self._Sectj
+
+            T = UtilTools.SegmentTools.PowerParasBuilder(SectI.T, SectJ.T, self._l, 1, self._eleLengthList)
+
+            Rout = UtilTools.SegmentTools.PowerParasBuilder(SectI.Rout, SectJ.Rout, self._l, 1, self._eleLengthList)
+
+            N_axis =  UtilTools.PointsTools.vectSub(self._Nj.point, self._Ni.point)
+            l_paras:list[Paras.HRoundSectParas] = []
+            l_node:list[BridgeNode] = []
+            l_sect:list[HRoundRCSect] = []
+            l_element:list[OpsObject.OpsElement] = []
+            l_mass:list[float] = []
+            
+            for p in poits:
+                node = BridgeNode(p, 0.0)
+                l_node.append(node)
+
+            for rout, t in zip(Rout, T):
+                paras = Paras.HRoundSectParas(rout, t)
+                l_paras.append(paras)
+
+            for i in range(len(self._eleLengthList)):
+                paras = UtilTools.SectTools.MeanSectParas(l_paras[i], l_paras[i+1])
+                paras = Paras.HRoundSectParas(*paras)
+
+                sect = HRoundRCSect(paras, poits[i], N_axis, self._CoreCon, self._CoverCon, self._Rebar, self._R[i])
+                l_sect.append(sect)
+
+                mass = sect.SectAttr['area'] * self._eleLengthList[i] * self._CoreCon.densty
+                l_mass.append(mass)
+                l_node[i].addMass(mass/2)
+                l_node[i+1].addMass(mass/2)
+
+                ele = OpsObject.OpsEBCElement(l_node[i].point, 
+                                    l_node[i+1].point,
+                                    l_sect[i],
+                                    self._localZAxis
+                                    )
+
+                l_element.append(ele) 
+                return l_node, l_sect, l_mass, l_element
+    @property
+    def ELeList(self):
+        return self._SegElementList
+    @ELeList.setter
+    def ELeList(self, newVal):
+        if type(newVal) is type(self._SegElementList):
+            self._SegElementList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def NodeList(self):
+        return self._BridgeNodeList
+    @NodeList.setter
+    def NodeList(self, newVal):
+        if type(newVal) is type(self._BridgeNodeList):
+            self._BridgeNodeList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def MassList(self):
+        return self._SegMassList
+    @MassList.setter
+    def MassList(self, newVal):
+        if type(newVal) is type(self._SegMassList):
+            self._SegMassList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    @property
+    def SectList(self):
+        return self._SegSectList
+    @SectList.setter
+    def SectList(self, newVal):
+        if type(newVal) is type(self._SegSectList):
+            self._SegSectList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def ELeList(self):
+        return self._SegElementList
+    @ELeList.setter
+    def ELeList(self, newVal):
+        if type(newVal) is type(self._SegElementList):
+            self._SegElementList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def NodeList(self):
+        return self._BridgeNodeList
+    @NodeList.setter
+    def NodeList(self, newVal):
+        if type(newVal) is type(self._BridgeNodeList):
+            self._BridgeNodeList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def MassList(self):
+        return self._SegMassList
+    @MassList.setter
+    def MassList(self, newVal):
+        if type(newVal) is type(self._SegMassList):
+            self._SegMassList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    @property
+    def SectList(self):
+        return self._SegSectList
+    @SectList.setter
+    def SectList(self, newVal):
+        if type(newVal) is type(self._SegSectList):
+            self._SegSectList = newVal
+        else:
+            raise Exception("Wrong Paras")
+class LineSRoundSeg(Segment):
+    @Comp.CompMgr()
+    def __init__(self, node_i: BridgeNode, node_j: BridgeNode, SectParas_i: Paras.SRoundSectParas, SectParas_j: Paras.SRoundSectParas, ConCore:Paras.ConcreteParas, ConCover:Paras.ConcreteParas, Rebar:Paras.SteelParas, RebarRList:list[float], RebarDistrParasList:list[Paras.SectRebarDistrParas], localZ: tuple[float], eleLengthList: list[float], name=""):
+        super().__init__(node_i, node_j, SectParas_i, SectParas_j, 1, localZ, eleLengthList, name)
+        self._CoreCon = ConCore
+        self._CoverCon = ConCover
+        self._Rebar = Rebar
+
+        if RebarDistrParasList and len(RebarDistrParasList) == len(eleLengthList):
+            print("INFO:As 'RebarDistrParasList' was used, 'RebarRList' is ingored")
+            self._R = RebarDistrParasList
+        elif RebarRList and len(RebarRList) == len(eleLengthList):
+            self._R = RebarRList
+        else:
+            raise Exception("Wrong Params, RebarDistParasList and RebarRList can not be None at same time, and the length should be same with eleLengthList.")
+        
+    def _Build(self):
+        points = UtilTools.PointsTools.LinePointBuilder(self._Ni, self._Nj, self._eleLengthList)
+        SectI:Paras.SRoundSectParas = self._Secti
+        SectJ:Paras.SRoundSectParas = self._Sectj
+
+
+        R = UtilTools.SegmentTools.PowerParasBuilder(SectI.R, SectJ.R, self._l, 1, self._eleLengthList)
+
+        N_axis =  UtilTools.PointsTools.vectSub(self._Nj.point, self._Ni.point)
+        l_paras:list[Paras.HRoundSectParas] = []
+        l_node:list[BridgeNode] = []
+        l_sect:list[HRoundRCSect] = []
+        l_element:list[OpsObject.OpsElement] = []
+        l_mass:list[float] = []
+        
+        for p in points:
+            node = BridgeNode(p, 0.0)
+            l_node.append(node)
+
+        for r  in zip(R):
+            paras = Paras.HRoundSectParas(r )
+            l_paras.append(paras)
+
+        for i in range(len(self._eleLengthList)):
+            paras = UtilTools.SectTools.MeanSectParas(l_paras[i], l_paras[i+1])
+            paras = Paras.HRoundSectParas(*paras)
+
+            sect = HRoundRCSect(paras, points[i], N_axis, self._CoreCon, self._CoverCon, self._Rebar, self._R[i])
+            l_sect.append(sect)
+
+            mass = sect.SectAttr['area'] * self._eleLengthList[i] * self._CoreCon.densty
+            l_mass.append(mass)
+            l_node[i].addMass(mass/2)
+            l_node[i+1].addMass(mass/2)
+
+            ele = OpsObject.OpsEBCElement(l_node[i].point, 
+                                l_node[i+1].point,
+                                l_sect[i],
+                                self._localZAxis
+                                )
+
+            l_element.append(ele) 
+            return l_node, l_sect, l_mass, l_element
+    
+    @property
+    def ELeList(self):
+        return self._SegElementList
+    @ELeList.setter
+    def ELeList(self, newVal):
+        if type(newVal) is type(self._SegElementList):
+            self._SegElementList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def NodeList(self):
+        return self._BridgeNodeList
+    @NodeList.setter
+    def NodeList(self, newVal):
+        if type(newVal) is type(self._BridgeNodeList):
+            self._BridgeNodeList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    @property
+    def MassList(self):
+        return self._SegMassList
+    @MassList.setter
+    def MassList(self, newVal):
+        if type(newVal) is type(self._SegMassList):
+            self._SegMassList = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    @property
+    def SectList(self):
+        return self._SegSectList
+    @SectList.setter
+    def SectList(self, newVal):
+        if type(newVal) is type(self._SegSectList):
+            self._SegSectList = newVal
+        else:
+            raise Exception("Wrong Paras")
+#TODO
+class BridgeModel(Comp.Parts):
+    @Comp.CompMgr()
+    def __init__(self, name=""):
+        super(BridgeModel, self).__init__(name)
+        self._type += "BridgeParts"
+        self._BridgeParas = None
+        self._Materials: list = []
+        self._Boundaries: list = []
+        self._Girder = None
+        self._Pier: list = []
+
+    def SetBridgeAttribution(self, *args):
+        for arg in args:
+            if isinstance(arg, Paras.BridgeParas):
+                self._BridgeParas = arg
+            elif isinstance(arg, Paras.MaterialParas):
+                self._Materials.append(arg)
+            elif isinstance(arg, Boundary):
+                self._Boundaries.append(arg)
+            elif isinstance(arg, LineBoxSeg):
+                self._Girder = arg
+            elif isinstance(arg, LineHRoundSeg):
+                self._Pier.append(arg)
+            else:
+                print('Wrong Type of argument: "' + arg + '"')
+                pass
+    def check(self):
+        if (self._BridgeParas is not Paras.BoxSectParas
+            or len(self._Materials) == 0
+            or len(self._Boundaries) == 0
+            or self._Girder is not LineBoxSeg
+            or len(self._Pier) == 0
+        ):
+            return False
+        else:
+            return True

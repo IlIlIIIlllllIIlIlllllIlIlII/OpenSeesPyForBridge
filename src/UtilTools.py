@@ -291,53 +291,40 @@ class PointsTools:
             return (rot.apply(Points), rot.apply(PointsTools.COORDSYS))
         else:
             return rot.apply(Points)
+    
 
     @staticmethod
     def RotatePoinsByVects(points:np.ndarray, source:np.ndarray, target:np.ndarray, coordsys:bool=False):
         return PointsTools.RotatePointsByPoints(points, source, target, coordsys)
 
     @staticmethod
-    def RotatePoints(Points:list[float], NewXAxis:tuple[float, ...], NewZAxis:tuple[float, ...]):
+    def ProjectVectsToNewCoordSYS(vect:np.ndarray, new_XAxis:np.ndarray, new_ZAxis:np.ndarray) -> np.ndarray:
         """
-        对点进行旋转,输出点的坐标
+        将一个向量映射到
+        map a vector in standand coordinate system to a new coordinate system
         """
+        if type(vect) is not np.ndarray:
+            vect = np.array(vect)
+        if type(new_XAxis) is not np.ndarray:
+            new_XAxis = np.array(new_XAxis)
+        if type(new_ZAxis) is not np.ndarray:
+            new_ZAxis = np.array(new_ZAxis)
+
+        new_YAxis = np.cross(new_XAxis, new_ZAxis)
+
+        new_ZAxis = np.cross(new_XAxis, new_YAxis)
+
         
-        # * 整体坐标系X轴
-        XAxis = np.array((1, 0, 0))
-        YAxis = np.array((0, 1, 0))
-        ZAxis = np.array((0, 0, 1))
-        # * 绕Z转动，计算x-y平面的角度变化
-        theta = PointsTools.vectAngle(PointsTools.ProjectVectInPlane(NewXAxis, XAxis, YAxis), XAxis)
-        if Util.TOLGT(NewXAxis[1], XAxis[1]):
-            theta = 2 * np.pi - theta
+        theta_x = PointsTools.vectAngle(vect, new_XAxis)
+        vect_x = PointsTools.NormOfvect(vect) * np.cos(theta_x)
+        theta_y = PointsTools.vectAngle(vect, new_YAxis)
+        vect_y = PointsTools.NormOfvect(vect) * np.cos(theta_y)
+        theta_z = PointsTools.vectAngle(vect, new_ZAxis)
+        vect_z = PointsTools.NormOfvect(vect) * np.cos(theta_z)
 
-        rat = R.from_euler('z', (theta))
-        if type(Points) is not np.ndarray:
-            Points = np.array(Points)
+        return np.array([vect_x, vect_y, vect_z])
 
-        Points = rat.apply(Points)
-        XAxis = rat.apply(XAxis)
-        YAxis = rat.apply(YAxis)
-        ZAxis = rat.apply(ZAxis)
-
-        # * 绕Y转动，计算x-z平面的角度变化
-        theta = PointsTools.vectAngle(PointsTools.ProjectVectInPlane(NewXAxis, XAxis, ZAxis), XAxis)
-        if Util.TOLLT(XAxis[2], 0):
-            theta = 2 * np.pi - theta
-
-        rat = R.from_euler('y', (-theta))
-        if type(Points) is not np.ndarray:
-            Points = np.array(Points)
-
-        Points = rat.apply(Points)
-        XAxis = rat.apply(XAxis)
-        YAxis = rat.apply(YAxis)
-        ZAxis = rat.apply(ZAxis)
-
-        # * 绕X转动，计算y-z平面的角度变化
-        theta = PointsTools.vectPlaneAngle(NewZAxis, XAxis, ZAxis)
-        # TODO
-        # if 
+     #  # if 
         
         
         # cos_theta = (x1 * x3 + y1 * y3) / math.sqrt(x3 * x3 + y3 * y3)

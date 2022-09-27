@@ -16,8 +16,7 @@ class SectParas(Paras):
 
 # * 箱梁截面参数类
 class BoxSectParas(SectParas):
-    __slots__ = ['_type', '_uniqNum', '_name', '_type', '_uniqNum', '_name', '_upper_width', '_down_width', '_height', 
-                 '_upper_thick', '_down_thick', '_web_thick']
+    __slots__ = []
     def __init__(
         self,
         upper_width: float,

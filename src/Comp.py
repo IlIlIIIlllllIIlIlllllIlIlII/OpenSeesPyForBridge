@@ -160,5 +160,12 @@ class Loads(Component, metaclass=ABCMeta):
         super().__init__(name)
         self._type += '->Laods'
 
+    @abstractmethod
+    def _OpsLoadBuild(self):
+        ...
+
+    @abstractmethod
+    def ApplyLoad(self):
+        self._OpsLoadBuild()
 class HRectSect():
     ...

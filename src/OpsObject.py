@@ -1,5 +1,6 @@
 # * OpsObj类不需要有Getter和setter
 from abc import ABCMeta, abstractmethod
+from ast import Try, arg
 import numpy as np
 import openseespy.opensees as ops
 from enum import Enum
@@ -639,9 +640,42 @@ class OpsLinearTimeSerise(OpsTimeSeries):
     # timeSeries('Linear', tag, '-factor', factor=1.0, '-tStart', tStart=0.0)
         ops.timeSeries('Linear', self._uniqNum)
 
+class OpsPathTimeSerise(OpsTimeSeries):
+    @Comp.CompMgr()
+    def __init__(self, times:list[float], values:list[float], name=""):
+        super().__init__(name)
+        self._times = times
+        self._values = values
+    
+    def _create(self):
+    # timeSeries('Path', tag, '-dt', dt=0.0, '-values', *values, '-time', *time, '-filePath', filePath='', '-fileTime', fileTime='', '-factor', factor=1.0, '-startTime', startTime=0.0, '-useLast', '-prependZero')
+        ops.timeSeries('Path', self._uniqNum, '-values', *self._values, '-time', *self._times)
+
 class OpsTimeSeriesEnum(Enum):
     Linear = OpsLinearTimeSerise()
     Const = OpsConstTimeSeries()
+
+
+class OpsPlainLoadPattern(Comp.OpsObj):
+    @Comp.CompMgr()
+    def __init__(self, timeseries:OpsTimeSeries=OpsTimeSeriesEnum.Linear, name=""):
+        super().__init__(name)
+        self._type += 'PlainPattern'
+        self._timeseries = timeseries
+    
+    def _create(self):
+        ops.pattern('Plain', self._uniqNum, self._timeseries)
+
+
+class OpsMSELoadPattern(Comp.OpsObj):
+    @Comp.CompMgr()
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += 'Multi-Support Excitation Pattern'
+    
+    def _create(self):
+        ops.pattern('MultipleSupport', self._uniqNum)
+
 
 class OpsPlainLoads(Comp.OpsObj):
     @abstractmethod
@@ -651,10 +685,10 @@ class OpsPlainLoads(Comp.OpsObj):
     
     @abstractmethod
     def _create(self):
-        # opattern('Plain', patternTag, tsTag, '-fact', fact)
-        ops.pattern('Plain', self._uniqNum, OpsTimeSeriesEnum.Linear.value.uniqNum)
+        ...
 
 class OpsNodeLoad(OpsPlainLoads):
+    @Comp.CompMgr()
     def __init__(self, load:tuple[float], node:OpsNode, name=""):
         super().__init__(name)
         self._type += '->OpsNodeLoad'
@@ -663,21 +697,73 @@ class OpsNodeLoad(OpsPlainLoads):
     
     def _create(self):
         # load(nodeTag, *loadValues)
-        super()._create()
+        
         ops.load(self._Node.uniqNum, *self._Load)
 
 class OpsEleLoad(OpsPlainLoads):
-    def __init__(self, load:tuple[float], ele:OpsElement, name=""):
+    @Comp.CompMgr()
+    def __init__(self, eles:list[OpsElement], wx:float=0.0, wy:float=0.0, wz:float=0.0, name=""):
         super().__init__(name)
         self._type += '->OpsElementLoad'
-        self._Load = load
-        self._Element = ele
-        self._Element._Transf._vecz
-        self._Element._Node1._xyz
-        self._Element._Node2._xyz
-        UtilTools.PointsTools.vectSub(x, y)
+        self._Elements = eles
+
+        self._Load = (wx, wy, wz)
 
     def _create(self):
         super()._create()
+        uniqNum_ = []
+        for ele in self._Elements:
+            uniqNum_.append(ele.uniqNum)
         # ops.eleLoad('-ele', self._Element.uniqNum, '-type', '-beamUniform', , <Wz>, Wx=0.0)
+        ops.eleLoad('-ele', *uniqNum_, '-type', '-beamUniform', self._Load[1], self._Load[2], Wx=self._Load[0])
         
+class OpsSP(OpsPlainLoads):
+    @Comp.CompMgr()
+    def __init__(self, node:OpsNode, dof:int, d:float, name=""):
+        super().__init__(name)
+        self._node = node
+        self._dof = dof
+        self._d = d
+    
+    def _create(self):
+        super()._create()
+        ops.sp(self._node.uniqNum, self._dof, self._d)
+
+class OpsPlaneGroundMotion(Comp.OpsObj):
+    @Comp.CompMgr()
+    def __init__(self, dispTimeHist:OpsPathTimeSerise=None, velTimeHist:OpsPathTimeSerise=None, accTimeHist:OpsPathTimeSerise=None, name=""):
+        super().__init__(name)
+
+        if not dispTimeHist and not velTimeHist and not accTimeHist:
+            raise Exception("disp, vel and accel can not be None at same time")
+
+        self._disp = dispTimeHist
+        self._vel = velTimeHist
+        self._acc = accTimeHist
+        
+
+    def _args(self):
+        args =[]
+
+        if self._disp:
+            args.append('-disp', self._disp.uniqNum)
+        if self._vel:
+            args.append('-vel', self._vel.uniqNum)
+        if self._acc:
+            args.append('-accel', self._acc.uniqNum)
+
+        return args
+
+
+    def _create(self):
+        # groundMotion(gmTag, 'Plain', '-disp', dispSeriesTag, '-vel', velSeriesTag, '-accel', accelSeriesTag, '-int', tsInt='Trapezoidal', '-fact', factor=1.0)
+        ops.groundMotion(self._uniqNum, 'Plain', *self._args())
+
+class OpsImposedGroundMotion(Comp.OpsObj):
+    @Comp.CompMgr()
+    def __init__(self, Node:OpsNode, dof:int, groundMotion:OpsPlaneGroundMotion, name=""):
+        super().__init__(name)
+        self._node = Node
+        self._dof = dof
+        self._groundMotion = groundMotion
+        ops.imposedMotion(self._node, self._dof,self._groundMotion.uniqNum)
