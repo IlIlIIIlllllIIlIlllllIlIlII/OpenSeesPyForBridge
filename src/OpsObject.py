@@ -75,13 +75,21 @@ class OpsFix(OpsBoundary):
 
     def _create(self):
         ops.fix(self._uniqNum, *self._fix)
+class OpsGemoTrans(Comp.OpsObj):
+    @abstractmethod
+    def __init__(self, vecz, name=""):
+        super().__init__(name)
+        self._vecz = vecz
+    
+    @abstractmethod
+    def _create(self):
+        ...
 
-class OpsLinearTrans(Comp.OpsObj):
+class OpsLinearTrans(OpsGemoTrans):
     __slots__ = ["_type", "_uniqNum", "_name", "_vecz"]
     @Comp.CompMgr()
     def __init__(self, vecz:tuple[int, ...], name=""):
-        super(OpsLinearTrans, self).__init__(name)
-        self._vecz = vecz
+        super(OpsLinearTrans, self).__init__(vecz, name)
 
     @property
     def val(self):
@@ -92,6 +100,19 @@ class OpsLinearTrans(Comp.OpsObj):
 
     def _create(self):
         ops.geomTransf("Linear", self._uniqNum, *self._vecz)
+
+class OpsPDletaTrans(OpsGemoTrans):
+    @Comp.CompMgr()
+    def __init__(self, vecz:tuple[float, ...], name=""):
+        super().__init__(vecz, name)
+        
+    @property
+    def val(self):
+        return [self._vecz]
+
+    def _create(self):
+        # geomTransf('PDelta', transfTag, *vecxz, '-jntOffset', *dI, *dJ)
+        ops.geomTransf("PDelta", self._uniqNum, *self._vecz)
 
 class OpsMaterial(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod

@@ -16,7 +16,7 @@ class PointLoads(StaticLoads):
     @Comp.CompMgr()
     def __init__(self, load:float, node:Part.BridgeNode, name=""):
         super().__init__(name)
-        self._type += 'PointLoads'
+        self._type += '->PointLoads'
         self._Load = load
         self._Node = node
         self._OpsPointLoad = self._OpsLoadBuild()
