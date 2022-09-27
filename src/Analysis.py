@@ -68,7 +68,7 @@ class OpsAnasysParams():
     def setNumberer(self, numbererEnum:OpsNumbererEnum):
         self.constraints.append(numbererEnum.value)
 
-    def setSystem(self, systemEnum:OpsSystemEnum, icntl14=20.0, icntl7=7)
+    def setSystem(self, systemEnum:OpsSystemEnum, icntl14=20.0, icntl7=7):
         if systemEnum != OpsSystemEnum.Mumps:
             print("systemEnum is not Mumps, icntl14 and inctly is ignored")
             self.system.append(systemEnum.value)
