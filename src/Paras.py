@@ -10,9 +10,9 @@ class SectParas(Paras):
         super(SectParas, self).__init__(name)
         self._type += "->SectParas"
     
-    @property
-    def val(self):
-        ...
+    # @property
+    # def val(self):
+    #     ...
 
 # * 箱梁截面参数类
 class BoxSectParas(SectParas):
@@ -176,7 +176,7 @@ class SRoundSectParas(SectParas):
             self._C = newVal
         else:
             raise Exception("Wrong Paras")
-
+    @property
     def val(self):
         return [self._R, self._C]
     
@@ -223,6 +223,7 @@ class HRoundSectParas(SectParas):
         else:
             raise Exception("Wrong Paras")
     
+    @property
     def val(self):
         return [self._R, self._T, self._C]
 

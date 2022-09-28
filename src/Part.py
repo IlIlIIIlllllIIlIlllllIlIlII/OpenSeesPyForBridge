@@ -1,4 +1,5 @@
 from ctypes import Union
+from stat import FILE_ATTRIBUTE_REPARSE_POINT
 import xsect
 import math
 from abc import ABCMeta, abstractmethod
@@ -14,12 +15,12 @@ from . import UtilTools
 class BridgeNode(Comp.Parts):
     __slots__ = ['_type', '_uniqNum', '_name', '_point', '_mass', '_OpsNode', '_OpsMass']
     @Comp.CompMgr()
-    def __init__(self, point:tuple[int, ...], mass:float=0.0, name="") -> None:
+    def __init__(self, x:float, y:float, z:float, mass:float=0.0, name="") -> None:
         super(Comp.Parts, self).__init__(name)
         self._type += "BridgeNode"
-        self._point = point
+        self._point = (x, y, z)
         self._mass = mass
-        self._OpsNode = OpsObject.OpsNode(self._point)
+        self._OpsNode:OpsObject.OpsNode = OpsObject.OpsNode(self._point)
         self._OpsMassList = []
 
         if mass - 0.0 >= abs(GlobalData.DEFVAL._TOL_):
@@ -77,17 +78,17 @@ class Boundary(Comp.Parts, metaclass=ABCMeta):
 
 class BridgeFixedBoundary(Boundary):
     __slots__ = ['_type', '_uniqNum', '_name', '_Node', '_OpsFix']
-    @Comp.CompMgr()
+    # @Comp.CompMgr()
     def __init__(self, node:BridgeNode, fixVal:list, name=""):
         super(BridgeFixedBoundary, self).__init__(name)
         self._type += "->FixedBoundary"
         self._node = node
         self._fixVal = fixVal
-        self._OpsFix = OpsObject.OpsFix(self._node, self._fixVal)
+        self._OpsFix = OpsObject.OpsFix(self._node.OpsNode, self._fixVal)
      
     def _SectReBuild(self):
         Comp.CompMgr.removeComp(self._OpsFix)
-        self._OpsFix = OpsObject.OpsFix(self._node, self._fixVal)
+        self._OpsFix = OpsObject.OpsFix(self._node.OpsNode, self._fixVal)
 
     @property
     def Node(self):
@@ -117,7 +118,7 @@ class BridgeFixedBoundary(Boundary):
 # * 截面类, 继承自构件类，派生出 主梁截面、桥墩截面
 class CrossSection(Comp.Parts, metaclass=ABCMeta):
     @abstractmethod
-    def __init__(self, paras, p:tuple[float, ...], N_axis:tuple[float, ...], name=""):
+    def __init__(self, paras, fiberSize, name=""):
         """
         
         """
@@ -125,20 +126,23 @@ class CrossSection(Comp.Parts, metaclass=ABCMeta):
 
         self._type += "->CrossSect" 
         self._Paras = paras
-        self._OrigPoint = p
-        self._N_axis = N_axis
+        # self._OrigPoint = p
+        # self._N_axis = N_axis
+        self._fiberSize = fiberSize
 
         self._SectAttr:dict = None
         self._Points:list[tuple[float, ...]] = None
+        self._SectAttr, self._Points = self._SectAttrBuild()
 
-        self._OpsSect = None
+        # self._OpsSect = self._OpsSectBuild()
+        
 
     @abstractmethod
     def _OpsSectBuild(self):
         ...
 
-    @abstractmethod
-    def _SectAttrBuild(self):
+    # @abstractmethod
+    # def _SectAttrBuild(self):
         ...
 
     @abstractmethod
@@ -150,27 +154,26 @@ class CrossSection(Comp.Parts, metaclass=ABCMeta):
         ...
 
     def check(self):
-        if (
-            type(self._OrigPoint) != np.ndarray
-            or type(self._N_axis) != tuple
-        ):
-            return False
-        else:
-            return True
+        ...
+        # if (
+        #     type(self._OrigPoint) != np.ndarray
+        #     or type(self._N_axis) != tuple
+        # ):
+        #     return False
+        # else:
+        #     return True
 
 # * 箱梁截面类
 class RCCrossSect(CrossSection):
 
     @abstractmethod
-    def __init__(self, paras, p: tuple[float, ...], N_axis: tuple[float, ...], CoreCon:Paras.ConcreteParas, CoverCon:Paras.ConcreteParas, Rebar:Paras.SteelParas, R_flag, fiberSize:tuple[int]=(100, 100), name=""):
-        super().__init__(paras, p, N_axis, name)
+    def __init__(self, paras, CoreCon:Paras.ConcreteParas, CoverCon:Paras.ConcreteParas, Rebar:Paras.SteelParas, R_flag, fiberSize:tuple[int], name=""):
+        super().__init__(paras, fiberSize, name)
 
-        self._type += "->RC_CrossSect"
+        self._type += "->Reforce Concrete Cross-Section"
         self._CoreCon:Paras.ConcreteParas = CoreCon
         self._CoverCon:Paras.ConcreteParas = CoverCon
         self._Rebar:Paras.SteelParas = Rebar
-        self._SectAttr, self._Points = self._SectAttrBuild()
-        self._FiberSize = fiberSize
 
         if type(R_flag) is float:
             self._RebarsDistr:Paras.SectRebarDistrParas = self._RebarsDistrBuild(R_flag)
@@ -206,11 +209,11 @@ class BoxSect(RCCrossSect):
     # __slots__ = []
     # __slots__ = ['_type', '_uniqNum', '_name', '_Paras', '_N_axis', '_Points', '_orig_point', '_attr', '_m', '_OpsSect']
     @Comp.CompMgr()
-    def __init__(self, paras: Paras, p: tuple[float, ...], N_axis: tuple[float, ...], Concrete: Paras.ConcreteParas, R_flag=None, name=""):
+    def __init__(self, paras: Paras, Concrete: Paras.ConcreteParas, R_flag=None, fiberSize:tuple[int, ...] = (100, 100), name=""):
         if R_flag is not None:
             print("R_flag is not used in BoxSect currently, has been set to 0")
             R_flag = 0.0
-        super().__init__(paras, p, N_axis, Concrete, None, None, R_flag, name)
+        super().__init__(paras, Concrete, None, None, R_flag, fiberSize, name)
         self._type += "->BoxSect"
         
         # self._attr, self._poins = self._SectAttrBuild()
@@ -225,11 +228,11 @@ class BoxSect(RCCrossSect):
 
     def _SectAttrBuild(self):
         paras:Paras.BoxSectParas = self.Paras
-        if self.Paras.check() != True:
-            raise Exception("Parameters Exists Zero")
+        # if self.Paras.check() != True:
+        #     raise Exception("Parameters Exists Zero")
         # * 根据箱梁参数、坐标原点、法向轴，建立箱梁截面
-        if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
-            raise Exception("Error length of orig_point or N_axis, should be 3")
+        # if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
+        #     raise Exception("Error length of orig_point or N_axis, should be 3")
         # *                            ^z
         # *                            |
         # *         1__________________|___________________2
@@ -290,19 +293,23 @@ class BoxSect(RCCrossSect):
         #     pass
         # # * 平移到orig_point
         # points = points + self._orig_point
-        points = UtilTools.PointsTools.RotatePointsByPoints(points, (1, 0, 0), self._N_axis)
-        points += self._OrigPoint
+        # points = UtilTools.PointsTools.RotatePointsByPoints(points, (1, 0, 0), self._N_axis)
+        # points += self._OrigPoint
         return arr, points
 
     def _RebarsDistrBuild(self, R):
         # TODO 可以写也可以不写
-        ...
+        return None
 
     def _SectReBuild(self):
         Comp.CompMgr.removeComp(self._OpsSect)
         Comp.CompMgr.removeComp(self._ConCore)
         self._SectAttr, self._Points = self._SectAttrBuild()
         self._OpsSect = self._OpsSectBuild()
+    
+    @property
+    def OpsSect(self):
+        return self._OpsSect
 
     @property
     def Paras(self):
@@ -315,28 +322,28 @@ class BoxSect(RCCrossSect):
         else:
             raise Exception("Wrong Paras")
     
-    @property
-    def N_aixs(self):
-        return self._N_axis
-    @N_aixs.setter
-    def N_aixs(self, newVal):
-        if type(newVal) is type(self._N_axis):
-            self._N_axis = newVal
-            self._SectReBuild()
-        else:
-            raise Exception("Wrong Paras")
+    # @property
+    # def N_aixs(self):
+    #     return self._N_axis
+    # @N_aixs.setter
+    # def N_aixs(self, newVal):
+    #     if type(newVal) is type(self._N_axis):
+    #         self._N_axis = newVal
+    #         self._SectReBuild()
+    #     else:
+    #         raise Exception("Wrong Paras")
     
-    @property
-    def OrigPoint(self):
+    # @property
+    # def OrigPoint(self):
         
-        return self._OrigPoint
-    @OrigPoint.setter
-    def OrigPoint(self, newVal):
-        if type(newVal) is type(self._OrigPoint):
-            self._OrigPoint = newVal
-            self._SectReBuild()
-        else:
-            raise Exception("Wrong Paras")
+    #     return self._OrigPoint
+    # @OrigPoint.setter
+    # def OrigPoint(self, newVal):
+    #     if type(newVal) is type(self._OrigPoint):
+    #         self._OrigPoint = newVal
+    #         self._SectReBuild()
+    #     else:
+    #         raise Exception("Wrong Paras")
     
     @property
     def SectAttr(self):
@@ -362,7 +369,7 @@ class BoxSect(RCCrossSect):
         """
         return [self._Paras, self._N_axis, self._orig_point, self._Points, self._Arr, self._m, self._OpsSect]
         """
-        return [self._Paras, self._N_axis, self._OrigPoint, self._Points, self._SectAttr, self._ConCore, self._OpsSect]
+        return [self._Paras, self._Points, self._SectAttr, self._ConCore, self._OpsSect]
     
     def plotSect(self, ax3d):
         # if self.check():
@@ -392,9 +399,9 @@ class BoxSect(RCCrossSect):
 class SRoundRCSect(RCCrossSect):
     __slots__ = []
     @Comp.CompMgr()
-    def __init__(self, paras: Paras.SRoundSectParas, p: tuple[float, ...], N_axis: tuple[float, ...], CoreCon: Paras.ConcreteParas, CoverCon: Paras.ConcreteParas, Rebar: Paras.SteelParas, R_flag, name=""):
-        super().__init__(paras, p, N_axis, CoreCon, CoverCon, Rebar, R_flag, name)
-        self._type += "->SRoundRCSect"
+    def __init__(self, paras: Paras.SRoundSectParas, CoreCon: Paras.ConcreteParas, CoverCon: Paras.ConcreteParas, Rebar: Paras.SteelParas, R_flag, name=""):
+        super().__init__(paras, CoreCon, CoverCon, Rebar, R_flag, name)
+        self._type += "->Soild Round Reforcment Concrete Section"
 
     def _SectAttrBuild(self):
         paras:Paras.SRoundSectParas = self._Paras
@@ -404,14 +411,14 @@ class SRoundRCSect(RCCrossSect):
         sectAttr = xsect.round_summary(d, step = step)
         points = xsect.round_points(d, step = step)
         points = UtilTools.PointsTools.TransXsectPointTo3D(points)
-        points = UtilTools.PointsTools.RotatePoinsByVects(points, UtilTools.PointsTools.X_AXIS, self._N_axis)
+        # points = UtilTools.PointsTools.RotatePoinsByVects(points, UtilTools.PointsTools.X_AXIS, self._N_axis)
 
         return sectAttr, points
 
     def _RebarsDistrBuild(self, R):
         
-        if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
-            raise Exception("Error length of orig_point or N_axis, should be 3")
+        # if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
+        #     raise Exception("Error length of orig_point or N_axis, should be 3")
 
         Rebars: Paras.SectRebarDistrParas = Paras.SectRebarDistrParas(
             *(UtilTools.BarsTools.SRoundRebarDistr(self._Paras, self._SectAttr, R))
@@ -426,7 +433,11 @@ class SRoundRCSect(RCCrossSect):
         core = OpsObject.OpsConcrete02(*self._CoreCon.val)
         rebar = OpsObject.OpsSteel02(*self._Rebar.val)
 
-        OpsObject.OpsSRoundFiberSection(paras.C, paras.R, self._SectAttr, self._RebarsDistr, core, cover, rebar, self._FiberSize)
+        return OpsObject.OpsSRoundFiberSection(paras.C, paras.R, self._SectAttr, self._RebarsDistr, core, cover, rebar, self._fiberSize)
+    
+    @property
+    def val(self):
+        return [self._Paras, self._SectAttr, self._Points, self._RebarsDistr, self._CoreCon, self._CoverCon, self._Rebar, self._fiberSize, self._OpsSect]
 
     def _SectReBuild(self):
         ...
@@ -438,9 +449,9 @@ class HRoundRCSect(RCCrossSect):
     __slots__ = []
 
     @Comp.CompMgr()
-    def __init__(self, paras: Paras.HRoundSectParas, p: tuple[float, ...], N_axis: tuple[float, ...], CoreCon: Paras.ConcreteParas, CoverCon: Paras.ConcreteParas, Rebar: Paras.SteelParas, R_flag, name=""):
-        super().__init__(paras, p, N_axis, CoreCon, CoverCon, Rebar, R_flag, name)
-        self._type += "->HRoundRCSect"
+    def __init__(self, paras: Paras.HRoundSectParas, CoreCon: Paras.ConcreteParas, CoverCon: Paras.ConcreteParas, Rebar: Paras.SteelParas, R_flag, fiberSize:tuple[int,...]=(100, 100), name=""):
+        super().__init__(paras, CoreCon, CoverCon, Rebar, R_flag, fiberSize, name)
+        self._type += "->Hollow Round RC Sect"
         # self._attr, self._Points = self._SectAttrBuild()
         # self._RebarsDistr = self._RebarsDistrBuild()
     
@@ -452,13 +463,13 @@ class HRoundRCSect(RCCrossSect):
         attr = xsect.round_summary(d, t, step = step)
         points = xsect.round_points(d, t, step = step)
         points = UtilTools.PointsTools.TransXsectPointTo3D(points)
-        points = UtilTools.PointsTools.RotatePoinsByVects(points, UtilTools.PointsTools.X_AXIS, self._N_axis)
+        # points = UtilTools.PointsTools.RotatePoinsByVects(points, UtilTools.PointsTools.X_AXIS, self._N_axis)
 
         return attr, points
         
     def _RebarsDistrBuild(self, R):
-        if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
-            raise Exception("Error length of orig_point or N_axis, should be 3")
+        # if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
+        #     raise Exception("Error length of orig_point or N_axis, should be 3")
 
         Rebars: Paras.SectRebarDistrParas = Paras.SectRebarDistrParas(
             *(UtilTools.BarsTools.HRoundRebarDistr(self._Paras, self._SectAttr, R))
@@ -468,10 +479,11 @@ class HRoundRCSect(RCCrossSect):
 
     def _OpsSectBuild(self):
         paras:Paras.HRoundSectParas = self._Paras
+        
         core = OpsObject.OpsConcrete02(*self._CoreCon.val)
         cover = OpsObject.OpsConcrete02(*self._CoverCon.val)
         rebar = OpsObject.OpsSteel02(*self._Rebar.val)
-        return OpsObject.OpsHRoundFiberSection(paras.C, paras.Rout, paras.Rin, self._SectAttr, self._RebarsDistr, cover, core, rebar, self._FiberSize)
+        return OpsObject.OpsHRoundFiberSection(paras.C, paras.Rout, paras.Rin, self._SectAttr, self._RebarsDistr, cover, core, rebar, self._fiberSize)
 
     def _SectReBuild(self):
         ...
@@ -490,13 +502,25 @@ class HRoundRCSect(RCCrossSect):
         else:
             raise Exception("Wrong Paras")
     
+    @property
+    def RebarDistr(self):
+        return self._RebarsDistr
+
+    @property
+    def OpsSect(self):
+        return self._OpsSect
+    
+    @property
+    def val(self):
+        return [self._Paras, self._SectAttr, self._Points, self._RebarsDistr, self._CoreCon, self._CoverCon, self._Rebar, self._fiberSize, self._OpsSect]
+    
 
 # * 空心矩形截面
 class HRectRCSect(RCCrossSect):
     @Comp.CompMgr()
-    def __init__(self, paras: Paras.HRectSectParas, p: tuple[float, ...], N_axis: tuple[float, ...], CoreCon: Paras.ConcreteParas, CoverCon: Paras.ConcreteParas, Rebar: Paras.SteelParas, R_flag, name=""):
-        super().__init__(paras, p, N_axis, CoreCon, CoverCon, Rebar, R_flag, name)
-        self._type += "->HrectRcSect"
+    def __init__(self, paras: Paras.HRectSectParas, CoreCon: Paras.ConcreteParas, CoverCon: Paras.ConcreteParas, Rebar: Paras.SteelParas, R_flag, fiberSize:tuple[int,...]=(100, 100), name=""):
+        super().__init__(paras, CoreCon, CoverCon, Rebar, R_flag, fiberSize, name)
+        self._type += "->Hollow Rectangle RC Sect"
 
         # self._Attr, self._Points = self._SectAttrBuild()
 
@@ -505,8 +529,9 @@ class HRectRCSect(RCCrossSect):
         opsConCore = OpsObject.OpsConcrete02(*self._CoreCon.val)
         opsConCover = OpsObject.OpsConcrete02(*self._CoverCon.val)
         opsRebar = OpsObject.OpsSteel02(*self._Rebar.val)
+        paras:Paras.HRectSectParas = self._Paras
 
-        return OpsObject.OpsHRectFiberSection(self._Paras.C, self._Paras.W, self._Paras.L, self._Paras.T, self._RebarsDistr, opsConCore, opsConCover, opsRebar, self._FiberSize)
+        return OpsObject.OpsHRectFiberSection(paras.C, paras.W, paras.L, paras.T, self._RebarsDistr, opsConCore, opsConCover, opsRebar, self._fiberSize)
 
     def _SectAttrBuild(self):
         paras:Paras.HRectSectParas = self._Paras
@@ -541,8 +566,8 @@ class HRectRCSect(RCCrossSect):
         xy_out = xy[:4]
         xy_in = xy[4:]
         arr = xsect.multi_section_summary([xy_out], subtract=[xy_in])
-        points = UtilTools.PointsTools.RotatePointsByPoints(points, (1, 0, 0), self._N_axis)
-        points += self._OrigPoint
+        # points = UtilTools.PointsTools.RotatePointsByPoints(points, (1, 0, 0), self._N_axis)
+        # points += self._OrigPoint
         return arr, points
         # x1, y1, z1 = (0, 0, 1)
         # x2, y2, z2 = (float(x) for x in self._N_axis)
@@ -584,8 +609,8 @@ class HRectRCSect(RCCrossSect):
 
     def _RebarsDistrBuild(self, R):
         
-        if len(self._OrigPoints) != 3 or len(self._N_axis) != 3:
-            raise Exception("Error length of orig_point or N_axis, should be 3")
+        # if len(self._OrigPoints) != 3 or len(self._N_axis) != 3:
+        #     raise Exception("Error length of orig_point or N_axis, should be 3")
 
         Rebars: Paras.SectRebarDistrParas= Paras.SectRebarDistrParas(
             *(UtilTools.BarsTools.HRectRebarDistr(self._Paras, self._SectAttr, R)))
@@ -623,29 +648,29 @@ class HRectRCSect(RCCrossSect):
         else:
             raise Exception("Wrong Paras")
     
-    @property
-    def N_Axis(self):
-        return self._N_axis
-    @N_Axis.setter
-    def N_Axis(self, newVal):
-        if type(newVal) is type(self._N_axis):
-            self._N_axis = newVal
-            self._SectAttrBuild()
-            self._SectReBuild()
-        else:
-            raise Exception("Wrong Paras")
+    # @property
+    # def N_Axis(self):
+    #     return self._N_axis
+    # @N_Axis.setter
+    # def N_Axis(self, newVal):
+    #     if type(newVal) is type(self._N_axis):
+    #         self._N_axis = newVal
+    #         self._SectAttrBuild()
+    #         self._SectReBuild()
+    #     else:
+    #         raise Exception("Wrong Paras")
     
-    @property
-    def OrigPoint(self):
-        return self._OrigPoints
-    @OrigPoint.setter
-    def OrigPoint(self, newVal):
-        if type(newVal) is type(self._OrigPoints):
-            self._OrigPoints= newVal
-            self._SectAttrBuild()
-            self._SectReBuild()
-        else:
-            raise Exception("Wrong Paras")
+    # @property
+    # def OrigPoint(self):
+    #     return self._OrigPoints
+    # @OrigPoint.setter
+    # def OrigPoint(self, newVal):
+    #     if type(newVal) is type(self._OrigPoints):
+    #         self._OrigPoints= newVal
+    #         self._SectAttrBuild()
+    #         self._SectReBuild()
+    #     else:
+    #         raise Exception("Wrong Paras")
     
     @property
     def ConCore(self):
@@ -689,29 +714,30 @@ class HRectRCSect(RCCrossSect):
         return [self._Paras, self._N_axis, self._OrigPoints, self._Points, self._Rebar, self._CoreCon, self._CoverCon, self._RebarsDistr, self._OpsSect]
 
     def plotSect(self, ax3d):
-        if self.check():
-            x, y, z = np.hsplit(self.Points, [1, 2])
-            x = x.flatten()
-            y = y.flatten()
-            z = z.flatten()
-            ax3d.plot(
-                np.hstack((x[:4], x[0])),
-                np.hstack((y[:4], y[0])),
-                np.hstack((z[:4], z[0])),
-            )
-            ax3d.plot(
-                np.hstack((x[4:], x[4])),
-                np.hstack((y[4:], y[4])),
-                np.hstack((z[4:], z[4])),
-            )
-            orig_point = (self.Points[0] + self.Points[2]) / 2
-            ax3d.plot(
-                [orig_point[0], orig_point[0] + self.N_axis[0]],
-                [orig_point[1], orig_point[1] + self.N_axis[1]],
-                [orig_point[2], orig_point[2] + self.N_axis[2]],
-            )
-        else:
-            raise Exception("Exist Undefined Member")
+        ...
+        # if self.check():
+        #     x, y, z = np.hsplit(self.Points, [1, 2])
+        #     x = x.flatten()
+        #     y = y.flatten()
+        #     z = z.flatten()
+        #     ax3d.plot(
+        #         np.hstack((x[:4], x[0])),
+        #         np.hstack((y[:4], y[0])),
+        #         np.hstack((z[:4], z[0])),
+        #     )
+        #     ax3d.plot(
+        #         np.hstack((x[4:], x[4])),
+        #         np.hstack((y[4:], y[4])),
+        #         np.hstack((z[4:], z[4])),
+        #     )
+        #     orig_point = (self.Points[0] + self.Points[2]) / 2
+        #     ax3d.plot(
+        #         [orig_point[0], orig_point[0] + self.N_axis[0]],
+        #         [orig_point[1], orig_point[1] + self.N_axis[1]],
+        #         [orig_point[2], orig_point[2] + self.N_axis[2]],
+        #     )
+        # else:
+        #     raise Exception("Exist Undefined Member")
 
 class Segment(Comp.Parts):
     @abstractmethod
@@ -732,10 +758,9 @@ class Segment(Comp.Parts):
         self._localXAxis:np.ndarray = UtilTools.PointsTools.vectSub(self._Ni.point, self._Nj.point)
         self._localZAxis:np.ndarray = np.array(localZ)
 
-        self._l = UtilTools.Util.PointsDis(self._Ni.point, self._Nj.point)
+        self._totalLen = UtilTools.PointsTools.PointsDist(self._Ni.point, self._Nj.point)
 
         self._eleLengthList:list[float] = eleLengthList
-        self._BridgeNodeList, self._SegSectList, self._SegMassList, self._SegElementList = self._Build()
         
     @abstractmethod
     def _Build():
@@ -811,22 +836,23 @@ class LineBoxSeg(Segment):
 
         super(LineBoxSeg, self).__init__(node_i, node_j, SectParas_i, SectParas_j, power, localZ, eleLengthList, name)
         self._con = con
+        self._BridgeNodeList, self._SegSectList, self._SegMassList, self._SegElementList = self._Build()
 
     def _Build(self):
-        if UtilTools.Util.TOLEQ(sum(self._eleLengthList), self._l) and self._eleLengthList is not None:
-            points = UtilTools.PointsTools.LinePointBuilder(self._Ni, self._Nj, self._eleLengthList)
+        if UtilTools.Util.TOLEQ(sum(self._eleLengthList), self._totalLen) and self._eleLengthList is not None:
+            points = UtilTools.PointsTools.LinePointBuilder(self._Ni.point, self._Nj.point, self._eleLengthList)
             SectI:Paras.BoxSectParas = self._Secti
             SectJ:Paras.BoxSectParas = self._Sectj
 
-            upper_W = UtilTools.SegmentTools.PowerParasBuilder(SectI.upper_W, SectJ.upper_W, self._l, 1, self._eleLengthList)
-            upper_T = UtilTools.SegmentTools.PowerParasBuilder(SectI.upper_T, SectJ.upper_T, self._l, 1, self._eleLengthList)
+            upper_W = UtilTools.SegmentTools.PowerParasBuilder(SectI.upper_W, SectJ.upper_W, self._totalLen, 1, self._eleLengthList)
+            upper_T = UtilTools.SegmentTools.PowerParasBuilder(SectI.upper_T, SectJ.upper_T, self._totalLen, 1, self._eleLengthList)
 
-            down_W =  UtilTools.SegmentTools.PowerParasBuilder(SectI.down_W, SectJ.down_W, self._l, 1, self._eleLengthList)
-            down_T =  UtilTools.SegmentTools.PowerParasBuilder(SectI.down_T, SectJ.down_T, self._l, 1, self._eleLengthList)
+            down_W =  UtilTools.SegmentTools.PowerParasBuilder(SectI.down_W, SectJ.down_W, self._totalLen, 1, self._eleLengthList)
+            down_T =  UtilTools.SegmentTools.PowerParasBuilder(SectI.down_T, SectJ.down_T, self._totalLen, 1, self._eleLengthList)
 
-            web_T =  UtilTools.SegmentTools.PowerParasBuilder(SectI.web_T, SectJ.web_T, self._l, 1, self._eleLengthList)
+            web_T =  UtilTools.SegmentTools.PowerParasBuilder(SectI.web_T, SectJ.web_T, self._totalLen, 1, self._eleLengthList)
 
-            h =  UtilTools.SegmentTools.PowerParasBuilder(SectI.H, SectJ.H, self._l, self._p, self._eleLengthList)
+            h =  UtilTools.SegmentTools.PowerParasBuilder(SectI.H, SectJ.H, self._totalLen, self._p, self._eleLengthList)
             N_axis =  UtilTools.PointsTools.vectSub(self._Nj.point, self._Ni.point)
             l_paras:list[Paras.BoxSectParas] = []
             l_node:list[BridgeNode] = []
@@ -851,9 +877,9 @@ class LineBoxSeg(Segment):
                 l_mass.append(mass)
                 l_node[i].addMass(mass/2)
                 l_node[i+1].addMass(mass/2)
-                ele = OpsObject.OpsEBCElement(l_node[i].point, 
-                                    l_node[i+1].point,
-                                    l_sect[i],
+                ele = OpsObject.OpsEBCElement(l_node[i].OpsNode, 
+                                    l_node[i+1].OpsNode,
+                                    l_sect[i].OpsSect,
                                     self._localZAxis
                                     )
 
@@ -958,6 +984,10 @@ class LineBoxSeg(Segment):
             self._SegSectList = newVal
         else:
             raise Exception("Wrong Paras")
+    
+    @property
+    def val(self):
+        return [self._Ni, self._Nj, self._Secti, self._Sectj, self._con, self._localZAxis, self._eleLengthList, self._p]
 # 
 class LineHRoundSeg(Segment):
     @Comp.CompMgr()
@@ -975,25 +1005,27 @@ class LineHRoundSeg(Segment):
         else:
             raise Exception("Wrong Params, RebarDistParasList and RebarRList can not be None at same time, and the length should be same with eleLengthList.")
 
+        self._BridgeNodeList, self._SegSectList, self._SegMassList, self._SegElementList = self._Build()
+
     def _Build(self):
-        if UtilTools.Util.TOLEQ(sum(self._eleLengthList), self._l) and self._eleLengthList is not None:
-            poits = UtilTools.PointsTools.LinePointBuilder(self._Ni, self._Nj, self._eleLengthList)
+        if UtilTools.Util.TOLEQ(sum(self._eleLengthList), self._totalLen) and self._eleLengthList is not None:
+            points = UtilTools.PointsTools.LinePointBuilder(self._Ni.point, self._Nj.point, self._eleLengthList)
             SectI:Paras.HRoundSectParas = self._Secti
             SectJ:Paras.HRoundSectParas = self._Sectj
 
-            T = UtilTools.SegmentTools.PowerParasBuilder(SectI.T, SectJ.T, self._l, 1, self._eleLengthList)
+            T = UtilTools.SegmentTools.PowerParasBuilder(SectI.T, SectJ.T, self._totalLen, 1, self._eleLengthList)
 
-            Rout = UtilTools.SegmentTools.PowerParasBuilder(SectI.Rout, SectJ.Rout, self._l, 1, self._eleLengthList)
+            Rout = UtilTools.SegmentTools.PowerParasBuilder(SectI.Rout, SectJ.Rout, self._totalLen, 1, self._eleLengthList)
 
-            N_axis =  UtilTools.PointsTools.vectSub(self._Nj.point, self._Ni.point)
+            # N_axis =  UtilTools.PointsTools.vectSub(self._Nj.point, self._Ni.point)
             l_paras:list[Paras.HRoundSectParas] = []
             l_node:list[BridgeNode] = []
             l_sect:list[HRoundRCSect] = []
             l_element:list[OpsObject.OpsElement] = []
             l_mass:list[float] = []
             
-            for p in poits:
-                node = BridgeNode(p, 0.0)
+            for p in points:
+                node = BridgeNode(*p, 0.0)
                 l_node.append(node)
 
             for rout, t in zip(Rout, T):
@@ -1004,7 +1036,7 @@ class LineHRoundSeg(Segment):
                 paras = UtilTools.SectTools.MeanSectParas(l_paras[i], l_paras[i+1])
                 paras = Paras.HRoundSectParas(*paras)
 
-                sect = HRoundRCSect(paras, poits[i], N_axis, self._CoreCon, self._CoverCon, self._Rebar, self._R[i])
+                sect = HRoundRCSect(paras, self._CoreCon, self._CoverCon, self._Rebar, self._R[i])
                 l_sect.append(sect)
 
                 mass = sect.SectAttr['area'] * self._eleLengthList[i] * self._CoreCon.densty
@@ -1012,14 +1044,15 @@ class LineHRoundSeg(Segment):
                 l_node[i].addMass(mass/2)
                 l_node[i+1].addMass(mass/2)
 
-                ele = OpsObject.OpsEBCElement(l_node[i].point, 
-                                    l_node[i+1].point,
-                                    l_sect[i],
+                ele = OpsObject.OpsEBCElement(l_node[i].OpsNode, 
+                                    l_node[i+1].OpsNode,
+                                    l_sect[i].OpsSect,
                                     self._localZAxis
                                     )
 
                 l_element.append(ele) 
-                return l_node, l_sect, l_mass, l_element
+
+            return l_node, l_sect, l_mass, l_element
     @property
     def ELeList(self):
         return self._SegElementList
@@ -1094,6 +1127,11 @@ class LineHRoundSeg(Segment):
             self._SegSectList = newVal
         else:
             raise Exception("Wrong Paras")
+    
+    @property
+    def val(self):
+        return [self._Ni, self._Nj, self._Secti, self._Sectj, self._CoreCon, self._CoverCon, self._Rebar, self._localZAxis, self._eleLengthList, self._R]
+
 class LineSRoundSeg(Segment):
     @Comp.CompMgr()
     def __init__(self, node_i: BridgeNode, node_j: BridgeNode, SectParas_i: Paras.SRoundSectParas, SectParas_j: Paras.SRoundSectParas, ConCore:Paras.ConcreteParas, ConCover:Paras.ConcreteParas, Rebar:Paras.SteelParas, RebarRList:list[float], RebarDistrParasList:list[Paras.SectRebarDistrParas], localZ: tuple[float], eleLengthList: list[float], name=""):
@@ -1109,14 +1147,16 @@ class LineSRoundSeg(Segment):
             self._R = RebarRList
         else:
             raise Exception("Wrong Params, RebarDistParasList and RebarRList can not be None at same time, and the length should be same with eleLengthList.")
+
+        self._BridgeNodeList, self._SegSectList, self._SegMassList, self._SegElementList = self._Build()
         
     def _Build(self):
-        points = UtilTools.PointsTools.LinePointBuilder(self._Ni, self._Nj, self._eleLengthList)
+        points = UtilTools.PointsTools.LinePointBuilder(self._Ni.point, self._Nj.point, self._eleLengthList)
         SectI:Paras.SRoundSectParas = self._Secti
         SectJ:Paras.SRoundSectParas = self._Sectj
 
 
-        R = UtilTools.SegmentTools.PowerParasBuilder(SectI.R, SectJ.R, self._l, 1, self._eleLengthList)
+        R = UtilTools.SegmentTools.PowerParasBuilder(SectI.R, SectJ.R, self._totalLen, 1, self._eleLengthList)
 
         N_axis =  UtilTools.PointsTools.vectSub(self._Nj.point, self._Ni.point)
         l_paras:list[Paras.HRoundSectParas] = []
@@ -1126,7 +1166,7 @@ class LineSRoundSeg(Segment):
         l_mass:list[float] = []
         
         for p in points:
-            node = BridgeNode(p, 0.0)
+            node = BridgeNode(*p, 0.0)
             l_node.append(node)
 
         for r  in zip(R):
@@ -1137,7 +1177,7 @@ class LineSRoundSeg(Segment):
             paras = UtilTools.SectTools.MeanSectParas(l_paras[i], l_paras[i+1])
             paras = Paras.HRoundSectParas(*paras)
 
-            sect = HRoundRCSect(paras, points[i], N_axis, self._CoreCon, self._CoverCon, self._Rebar, self._R[i])
+            sect = HRoundRCSect(paras, self._CoreCon, self._CoverCon, self._Rebar, self._R[i])
             l_sect.append(sect)
 
             mass = sect.SectAttr['area'] * self._eleLengthList[i] * self._CoreCon.densty
@@ -1145,9 +1185,9 @@ class LineSRoundSeg(Segment):
             l_node[i].addMass(mass/2)
             l_node[i+1].addMass(mass/2)
 
-            ele = OpsObject.OpsEBCElement(l_node[i].point, 
-                                l_node[i+1].point,
-                                l_sect[i],
+            ele = OpsObject.OpsEBCElement(l_node[i].OpsNode, 
+                                l_node[i+1].OpsNode,
+                                l_sect[i].OpsSect,
                                 self._localZAxis
                                 )
 
@@ -1163,6 +1203,7 @@ class LineSRoundSeg(Segment):
             self._SegElementList = newVal
         else:
             raise Exception("Wrong Paras")
+
     @property
     def NodeList(self):
         return self._BridgeNodeList
@@ -1172,6 +1213,7 @@ class LineSRoundSeg(Segment):
             self._BridgeNodeList = newVal
         else:
             raise Exception("Wrong Paras")
+
     @property
     def MassList(self):
         return self._SegMassList
@@ -1191,6 +1233,10 @@ class LineSRoundSeg(Segment):
             self._SegSectList = newVal
         else:
             raise Exception("Wrong Paras")
+    @property
+    def val(self):
+        return [self._Ni, self._Nj, self._Secti, self._Sectj, self._CoreCon, self._CoverCon, self._Rebar, self._localZAxis, self._eleLengthList, self._R]
+
 #TODO
 class BridgeModel(Comp.Parts):
     @Comp.CompMgr()

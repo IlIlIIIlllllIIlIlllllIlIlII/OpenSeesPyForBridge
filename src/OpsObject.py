@@ -1,6 +1,6 @@
 # * OpsObj类不需要有Getter和setter
 from abc import ABCMeta, abstractmethod
-from ast import Try, arg
+from tkinter.tix import Tree
 import numpy as np
 import openseespy.opensees as ops
 from enum import Enum
@@ -31,24 +31,28 @@ class OpsNode(Comp.OpsObj):
         return "({}, {}, {})".format(self._xyz[0], self._xyz[1], self._xyz[2])
 
 class OpsMass(Comp.OpsObj):
-    @Comp.CompMgr()
-    def __init__(self, node:OpsNode, mass:float, massDist:list[int], name=""):
+    def __init__(self, node:OpsNode, mass:float, dof:list[int]=[0,0,-1,0,0,0], name=""):
         super(OpsMass, self).__init__(name)
+        self._type += '->OpsMass'
         self._Node = node
         self._mass = mass
-        if len(massDist) == 6 and UtilTools.Util.isOnlyHas(massDist, [0, 1]):
-            self._Dist = massDist
+        if len(dof) == 6 and UtilTools.Util.isOnlyHas(dof, [0, 1, -1]):
+            self._massDof = dof
     
     def _create(self):
-        ops.mass(self._uniqNum,self._Node.uniqNum, self._mass, 
-                 self._mass*self._mass[0], self._mass*self._mass[1], self._mass*self._mass[2],
-                 self._mass*self._mass[3],self._mass*self._mass[4],self._mass*self._mass[5])
+        ops.mass(self._Node.uniqNum, 
+                 self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2],
+                 self._mass*self._massDof[3], self._mass*self._massDof[4], self._mass*self._massDof[5])
+    
+    @property
+    def val(self):
+        return [self._Node, self._mass, self._massDof]
 
 class OpsBoundary(Comp.OpsObj):
     @abstractmethod
-    def __init__(self, node:tuple[int, ...], name=""):
+    def __init__(self, node:OpsNode, name=""):
         super(OpsBoundary, self).__init__(name)
-        self._node = node
+        self._node:OpsNode = node
     
     @abstractmethod
     def _create(self):
@@ -56,16 +60,15 @@ class OpsBoundary(Comp.OpsObj):
 
 class OpsFix(OpsBoundary):
     __slots__ = ["_type", "_uniqNum", "_name", "_node", "_fix"]
-    @Comp.CompMgr()
-    def __init__(self, node: tuple[int, ...], fixlist:list[int] , name=""):
+    # @Comp.CompMgr()
+    def __init__(self, node: OpsNode, fixlist:list[int] , name=""):
         super(OpsFix, self).__init__(node, name)
-        if len(fixlist) != 3 \
-            and fixlist[0] * fixlist[1] * fixlist[2] != 0 \
-            or fixlist[0] * fixlist[1] * fixlist[2] != 1:
-
+        self._type = '->OpsFixBoundary'
+        if len(fixlist) != 6 and not UtilTools.Util.isOnlyHas(fixlist, [1, 0], flatten=True):
             raise Exception("Wrong Paras:{}".format(fixlist))
 
         self._fix = fixlist
+        self._create()
 
     @property
     def val(self):
@@ -75,12 +78,13 @@ class OpsFix(OpsBoundary):
         return [self._node, self._fix]
 
     def _create(self):
-        ops.fix(self._uniqNum, *self._fix)
+        ops.fix(self._node.uniqNum, *self._fix)
 class OpsGemoTrans(Comp.OpsObj):
     @abstractmethod
     def __init__(self, vecz, name=""):
         super().__init__(name)
-        self._vecz = vecz
+        self._type += '->OpsGemoTrans'
+        self._vecz = np.array(vecz).tolist()
     
     @abstractmethod
     def _create(self):
@@ -91,6 +95,7 @@ class OpsLinearTrans(OpsGemoTrans):
     @Comp.CompMgr()
     def __init__(self, vecz:tuple[int, ...], name=""):
         super(OpsLinearTrans, self).__init__(vecz, name)
+        self._type += '->OpsLinearTrans'
 
     @property
     def val(self):
@@ -106,6 +111,7 @@ class OpsPDletaTrans(OpsGemoTrans):
     @Comp.CompMgr()
     def __init__(self, vecz:tuple[float, ...], name=""):
         super().__init__(vecz, name)
+        self._type += '->OpsPDletaTrans'
         
     @property
     def val(self):
@@ -143,7 +149,7 @@ class OpsConcrete02(OpsMaterial):
     def __init__(self, Fpc:float, Epsc0:float, Fpcu:float, EpsU:float, 
                     Lambda:float=0.1, Ft:float=None, Ets:float=None, name=""):
         super(OpsConcrete02, self).__init__(name)
-        self._type += "Concrete02"
+        self._type += "->Concrete02"
         if Ft == None:
             Ft = 0.1 * Fpc
         if Ets == None:
@@ -224,7 +230,7 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, name=""):
         super(OpsSection, self).__init__(name)
-        self._type += "->BridgeCrossSection"
+        self._type += "->Bridge Cross Section"
 
     @abstractmethod
     def _create(self):
@@ -253,7 +259,7 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
 
     @staticmethod
     def RoundRebarFiberBuild(r:float, m:OpsMaterial, area:GlobalData.ReBarArea, n:int):
-        ops.layer("circ", m.uniqNum, n, area, 0, 0, r)
+        ops.layer("circ", m.uniqNum, n, area.value, 0, 0, r)
 
     @staticmethod
     def HRectConcreteFiberBuild(w:float, l:float, t:float, m: OpsMaterial, fibersize:tuple[int, ...]):
@@ -273,12 +279,16 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         ops.patch("rect", m.uniqNum, *fibersize, *p2, *p33)
         ops.patch("rect", m.uniqNum, *fibersize, *p3, *p44)
         ops.patch("rect", m.uniqNum, *fibersize, *p4, *p11)
-    
+    @staticmethod
     def RoundConcreteFiberBuild(Rin:float, Rout:float, m:OpsMaterial, fiberSize:tuple[int, ...]):
         # patch('circ', matTag, numSubdivCirc, numSubdivRad, *center, *rad, *ang)
         Circ, Rad = fiberSize
         nRad = int(round((Rout-Rin)/Circ, 0))
-        nCirc = int(round((np.pi*2*Rout + np.pi*2*Rin) / 2 / Rad), 0)
+        nCirc = int(round((np.pi*2*Rout + np.pi*2*Rin) / 2 / Rad, 0))
+        if nRad < 1:
+            nRad = 1
+        if nCirc < 4:
+            nCirc = 4
         ops.patch("circ", m.uniqNum, nCirc, nRad, 0, 0, Rin, Rout, 0, 360)
 
 
@@ -289,6 +299,7 @@ class OpsBoxSection(OpsSection):
         self, area:float, Ix:float, Iy:float, Ij:float, m:OpsConcrete02, name=""
     ):
         super(OpsBoxSection, self).__init__(name)
+        self._type += 'Box Section'
         self._attr = {"area":area, "inertia_x":Ix, "interia_y":Iy, "interia_j":Ij}
         self._material = m
 
@@ -330,6 +341,7 @@ class OpsHRoundFiberSection(OpsSection):
         name = ""
     ):
         super().__init__(name)
+        self._type += '->Hollow Round FiberSection'
     
         self._Rin = R_in
         self._Rout = R_out
@@ -447,7 +459,7 @@ class OpsHRectFiberSection(OpsSection):
         name="",
     ):
         super(OpsHRectFiberSection, self).__init__(name)
-        self._type += "->PierFiberSection"
+        self._type += "->Hollow Rectangle Section"
         self._c = cover
         self._l = length
         self._w = width
@@ -515,7 +527,7 @@ class OpsElement(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, node1:OpsNode, node2:OpsNode, sect:OpsSection, transf:OpsLinearTrans, name=""):
         super(OpsElement, self).__init__(name)
-        self._type += "BridgeElement"
+        self._type += "->OpsElement"
         self._Node1 = node1
         self._Node2 = node2
         self._Sect = sect
@@ -531,7 +543,7 @@ class OpsZLElement(OpsElement):
     def __init__(self, node1:OpsNode, node2:OpsNode, mats:list[OpsMaterial], dirs:list[int], name=""):
         super().__init__(node1, node2, None, None, name)
 
-        self._type = '->OpsZeroLengthElement'
+        self._type += '->OpsZeroLengthElement'
 
         if len(mats) != len(dirs):
             raise Exception("wrong paras:{} and {}".format(mats, dirs))
@@ -558,7 +570,7 @@ class OpsEBCElement(OpsElement):
     __slots__ = []
     @Comp.CompMgr()
     def __init__(
-        self, node1:tuple[int, ...], node2: tuple[int, ...], sec: OpsSection, localZ: tuple, name=""
+        self, node1:OpsNode, node2: OpsNode, sec: OpsSection, localZ: tuple, name=""
     ):
         super(OpsEBCElement, self).__init__(node1, node2, sec, OpsLinearTrans(localZ), name)
 
@@ -575,8 +587,8 @@ class OpsEBCElement(OpsElement):
         ops.element(
             "elasticBeamColumn",
             self._uniqNum,
-            *(self._Node1),
-            *(self._Node2),
+            self._Node1.uniqNum,
+            self._Node2.uniqNum,
             self._Sect.uniqNum,
             self._Transf.uniqNum
         )
@@ -587,7 +599,7 @@ class OpsNBCElement(OpsElement):
     def __init__(self, node1:tuple[int, ...], node2:tuple[int, ...], sect:OpsBoxSection, localZ:tuple[int],
                 IntgrNum:int=5, maxIter=10, tol:float=1e-12, mass:float=0.0, IntgrType:str="Lobatto", name=""):
         super(OpsNBCElement, self).__init__(node1, node2, sect, OpsLinearTrans(localZ), name)
-        self._type += "->NonlinearBeamColumnElement"
+        self._type += "->Nonlinear Beam Column Element"
 
         self._intgrN = IntgrNum
         self._maxIer = maxIter
@@ -606,8 +618,8 @@ class OpsNBCElement(OpsElement):
         # element('nonlinearBeamColumn', eleTag, *eleNodes, numIntgrPts, 
         # secTag, transfTag, '-iter', maxIter=10, tol=1e-12, '-mass', mass=0.0, 
         # '-integration', intType)
-        ops.element('nonlinearBeamColumn', self._uniqNum, *self._Node1, *self._Node2, 
-                    self._intgrN, self._Sect.uniqNum, self._Transf, '-iter', self._maxIer, self._tol,
+        ops.element('nonlinearBeamColumn', self._uniqNum, *self._Node1.uniqNum, *self._Node2.uniqNum, 
+                    self._intgrN, self._Sect.uniqNum, self._Transf.uniqNum, '-iter', self._maxIer, self._tol,
                     '-mass', self._mass, '-itegration', self._intgrType)
 
 class OpsTimeSeries(Comp.OpsObj):
@@ -644,6 +656,7 @@ class OpsPathTimeSerise(OpsTimeSeries):
     @Comp.CompMgr()
     def __init__(self, times:list[float], values:list[float], name=""):
         super().__init__(name)
+        self._type += '->OpsPathTimeSerise'
         self._times = times
         self._values = values
     
@@ -658,20 +671,20 @@ class OpsTimeSeriesEnum(Enum):
 
 class OpsPlainLoadPattern(Comp.OpsObj):
     @Comp.CompMgr()
-    def __init__(self, timeseries:OpsTimeSeries=OpsTimeSeriesEnum.Linear, name=""):
+    def __init__(self, timeseries:OpsTimeSeries=OpsTimeSeriesEnum.Linear.value, name=""):
         super().__init__(name)
-        self._type += 'PlainPattern'
+        self._type += '->OpsPlainPattern'
         self._timeseries = timeseries
     
     def _create(self):
-        ops.pattern('Plain', self._uniqNum, self._timeseries)
+        ops.pattern('Plain', self._uniqNum, self._timeseries.uniqNum)
 
 
 class OpsMSELoadPattern(Comp.OpsObj):
     @Comp.CompMgr()
     def __init__(self, name=""):
         super().__init__(name)
-        self._type += 'Multi-Support Excitation Pattern'
+        self._type += '->Multi-Support Excitation Pattern'
     
     def _create(self):
         ops.pattern('MultipleSupport', self._uniqNum)
@@ -681,58 +694,71 @@ class OpsPlainLoads(Comp.OpsObj):
     @abstractmethod
     def __init__(self, name=""):
         super().__init__(name)
-        self._type += '->OpsLoads'
+        self._type += '->OpsPlainLoads'
     
     @abstractmethod
     def _create(self):
         ...
 
 class OpsNodeLoad(OpsPlainLoads):
-    @Comp.CompMgr()
+    # @Comp.CompMgr()
     def __init__(self, load:tuple[float], node:OpsNode, name=""):
         super().__init__(name)
         self._type += '->OpsNodeLoad'
         self._Load = load
         self._Node = node
+        self._create()
     
     def _create(self):
         # load(nodeTag, *loadValues)
         
         ops.load(self._Node.uniqNum, *self._Load)
+    
+    @property
+    def val(self):
+        return [self._Load, self._Node]
 
 class OpsEleLoad(OpsPlainLoads):
-    @Comp.CompMgr()
+    # @Comp.CompMgr()
     def __init__(self, eles:list[OpsElement], wx:float=0.0, wy:float=0.0, wz:float=0.0, name=""):
         super().__init__(name)
         self._type += '->OpsElementLoad'
         self._Elements = eles
 
         self._Load = (wx, wy, wz)
+        self._create()
 
     def _create(self):
-        super()._create()
+        # super()._create()
         uniqNum_ = []
         for ele in self._Elements:
             uniqNum_.append(ele.uniqNum)
         # ops.eleLoad('-ele', self._Element.uniqNum, '-type', '-beamUniform', , <Wz>, Wx=0.0)
-        ops.eleLoad('-ele', *uniqNum_, '-type', '-beamUniform', self._Load[1], self._Load[2], Wx=self._Load[0])
+        ops.eleLoad('-ele', *uniqNum_, '-type', '-beamUniform', self._Load[1], self._Load[2], self._Load[0])
+    
+    @property
+    def val(self):
+        return [self._Elements, self._Load]
         
 class OpsSP(OpsPlainLoads):
-    @Comp.CompMgr()
-    def __init__(self, node:OpsNode, dof:int, d:float, name=""):
+    # @Comp.CompMgr()
+    def __init__(self, node:OpsNode, dof:int, dofValue:float, name=""):
         super().__init__(name)
+        self._type += '->OpsSP'
         self._node = node
         self._dof = dof
-        self._d = d
+        self._d = dofValue
+        self._create()
     
     def _create(self):
-        super()._create()
+        # sp(nodeTag, dof, *dofValues)
         ops.sp(self._node.uniqNum, self._dof, self._d)
 
-class OpsPlaneGroundMotion(Comp.OpsObj):
+class OpsPlainGroundMotion(Comp.OpsObj):
     @Comp.CompMgr()
     def __init__(self, dispTimeHist:OpsPathTimeSerise=None, velTimeHist:OpsPathTimeSerise=None, accTimeHist:OpsPathTimeSerise=None, name=""):
         super().__init__(name)
+        self._type += '->OpsPlain Ground Motion'
 
         if not dispTimeHist and not velTimeHist and not accTimeHist:
             raise Exception("disp, vel and accel can not be None at same time")
@@ -758,12 +784,17 @@ class OpsPlaneGroundMotion(Comp.OpsObj):
     def _create(self):
         # groundMotion(gmTag, 'Plain', '-disp', dispSeriesTag, '-vel', velSeriesTag, '-accel', accelSeriesTag, '-int', tsInt='Trapezoidal', '-fact', factor=1.0)
         ops.groundMotion(self._uniqNum, 'Plain', *self._args())
+    
+    @property
+    def val(self):
+        return [self._disp, self._vel, self._acc]
 
 class OpsImposedGroundMotion(Comp.OpsObj):
-    @Comp.CompMgr()
-    def __init__(self, Node:OpsNode, dof:int, groundMotion:OpsPlaneGroundMotion, name=""):
+    # @Comp.CompMgr()
+    def __init__(self, Node:OpsNode, dof:int, groundMotion:OpsPlainGroundMotion, name=""):
         super().__init__(name)
+        self._type += '->Ops Imposed Ground Motion'
         self._node = Node
         self._dof = dof
         self._groundMotion = groundMotion
-        ops.imposedMotion(self._node, self._dof,self._groundMotion.uniqNum)
+        ops.imposedMotion(self._node.uniqNum, self._dof, self._groundMotion.uniqNum)

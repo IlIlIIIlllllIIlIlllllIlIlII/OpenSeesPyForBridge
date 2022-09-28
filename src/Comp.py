@@ -1,6 +1,9 @@
+from types import ClassMethodDescriptorType
+import numpy as np
 import openseespy.opensees as ops
 from abc import ABCMeta, abstractmethod
 from .GlobalData import DEFVAL
+
 
 # * 构件类 基础类，所有的类都有该类派生
 class Component(metaclass=ABCMeta):
@@ -64,12 +67,27 @@ class CompMgr:
             return (None, None)
         for index, Comp in enumerate(cls._allComp):
             if Comp.__class__ == tarComp.__class__:
-                if Comp.val == tarComp.val:
+                # if Comp.val == tarComp.val:
+                if CompMgr.CompareCompVal(Comp.val, tarComp.val):
                     return index, Comp 
             else:
                 pass
 
         return (None, None)
+    
+    @staticmethod
+    def CompareCompVal(val1, val2):
+        flag = True
+        for x, y in zip(val1, val2):
+            if type(x) == np.ndarray:
+                flag = np.all(x==y)
+            else:
+                flag = (x == y)
+            
+            if not flag:
+                return flag
+
+        return flag
 
     @classmethod
     def getUniqNum(cls):
@@ -89,6 +107,13 @@ class CompMgr:
     @classmethod
     def addCompName(cls, name, uniqNum):
         cls._compDic[name] = uniqNum
+    
+    @classmethod
+    def clearComp(cls):
+        cls._allComp:list[Component] = []
+        cls._compDic = {}
+        cls._uniqNum = 0
+        ops.wipe()
 
     @classmethod
     @property
@@ -124,6 +149,7 @@ class OpsObj(Component, metaclass=ABCMeta):
                 self._built = True
             return self._uniqNum
         else:
+            self._built = True
             return self._linkedOpsObj.uniqNum
 
 # * 参数类，派生出主梁截面参数类，桥墩截面参数类......
@@ -140,9 +166,9 @@ class Paras(Component, metaclass=ABCMeta):
                     return False
         return True
 
-    @property
-    def val(self):
-        return super().val
+    # @property
+    # def val(self):
+    #     ...
 
 class Parts(Component, metaclass=ABCMeta):
     @abstractmethod
@@ -150,9 +176,9 @@ class Parts(Component, metaclass=ABCMeta):
         super(Parts, self).__init__(name)
         self._type += "->Parts"
         
-    @abstractmethod
-    def _SectReBuild(self):
-        ...
+    # @abstractmethod
+    # def _SectReBuild(self):
+    #     ...
 
 class Loads(Component, metaclass=ABCMeta):
     @abstractmethod
@@ -164,7 +190,6 @@ class Loads(Component, metaclass=ABCMeta):
     def _OpsLoadBuild(self):
         ...
 
-    @abstractmethod
     def ApplyLoad(self):
         self._OpsLoadBuild()
 class HRectSect():

@@ -23,10 +23,14 @@ class PointLoads(StaticLoads):
         super().__init__(name)
         self._type += '->PointLoads'
         self._Load = (fx, fy, fz, mx, my, mz)
-        self._Node = node
+        self._Node:Part.BridgeNode = node
     
     def _OpsLoadBuild(self):
         OpsObject.OpsNodeLoad(self._Load, self._Node.OpsNode)
+    
+    @property
+    def val(self):
+        return [self._Load, self._Node]
 
 class ElementsLoads(StaticLoads):
     def __init__(self, ele:Part.Segment, wx:float=0.0, wy:float=0.0, wz:flags=0.0, GlobalCoordSys:bool=True, name=""):
@@ -46,20 +50,29 @@ class ElementsLoads(StaticLoads):
     def _OpsLoadBuild(self):
         OpsObject.OpsEleLoad(self._Elements.ELeList, *self._Load)
 
+    @property
+    def val(self):
+        return [self._Load, self._Elements]
+
 class Gravity(StaticLoads):
-    def __init__(self, seg:Part.Segment, name=''):
+    def __init__(self, segList:list[Part.Segment], name=''):
         super().__init__(name)
         self._type += '->Gravity'
-        self._seg = seg
+        self._segList = segList
 
     def _OpsLoadBuild(self):
-        
-        ele_ = self._seg.ELeList
-        mass_ = self._seg.MassList
-        eleLength_ = self._seg.EleLength
-        for ele, mass, length in zip(ele_, mass_, eleLength_):
-            wz = -mass * GlobalData.DEFVAL._G_ / length
-            OpsObject.OpsEleLoad(ele, wz=wz)
+        for seg in self._segList:
+
+            ele_ = seg.ELeList
+            mass_ = seg.MassList
+            eleLength_ = seg.EleLength
+            for ele, mass, length in zip(ele_, mass_, eleLength_):
+                wz = -mass * GlobalData.DEFVAL._G_ / length
+                OpsObject.OpsEleLoad([ele], wz=wz)
+            
+    @property
+    def val(self):
+        return [self._segList]
 
 class DispLoad(StaticLoads):
     def __init__(self, node:Part.BridgeNode, dx:float=0.0, dy:float=0.0, dz:float=0.0, name=""):
@@ -71,6 +84,10 @@ class DispLoad(StaticLoads):
         for i, d in enumerate(self._disp):
             if not UtilTools.Util.TOLEQ(d, 0):
                 OpsObject.OpsSP(self._node.OpsNode, i+1, d)
+
+    @property
+    def val(self):
+        return [self._node, self._disp]
 
 class DynamicLoads(Comp.Loads, metaclass = ABCMeta):
     @abstractmethod
@@ -94,5 +111,8 @@ class EarthquakeLoads(Comp.Loads):
         acc = OpsObject.OpsPathTimeSerise(self._times, self._acc)
         vel = OpsObject.OpsPathTimeSerise(self._times, self._vecl)
         disp = OpsObject.OpsPathTimeSerise(self._times, self._disp)
-        OpsObject.OpsPlaneGroundMotion(disp, vel, acc)
+        OpsObject.OpsPlainGroundMotion(disp, vel, acc)
     
+    @property
+    def val(self):
+        return [self._times, self._acc, self._vecl, self._disp]

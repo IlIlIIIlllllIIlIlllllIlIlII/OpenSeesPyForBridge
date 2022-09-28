@@ -1,5 +1,3 @@
-#%%
-from base64 import standard_b64decode
 import numpy as np
 import math
 from scipy.spatial.transform import Rotation as R
@@ -7,6 +5,7 @@ from scipy.spatial.transform import Rotation as R
 from .Comp import Paras
 from .GlobalData import DEFVAL, ReBarArea, ReBarType
 from .Paras import HRectSectParas, HRoundSectParas, SRoundSectParas
+from src import Comp
 #%%
 class SectTools:
     @staticmethod
@@ -55,12 +54,12 @@ class PointsTools:
         dy = p1[1] - p2[1]
         dz = p1[2] - p2[2]
         pointsList = [p1]
-        if Util.TOLEQ(Util.PointsDis(p1, p2), sum(intervalList)):
+        if Util.TOLEQ(PointsTools.PointsDist(p1, p2), sum(intervalList)):
             rate = [sum(intervalList[:i+1])/sum(intervalList) for i,_ in enumerate(intervalList)]
             temp = 0
 
             for r in rate:
-                temp = (p1[0] - dx * r, p1[1] - dy * r, p2[2] - dz * r)
+                temp = (p1[0] - dx * r, p1[1] - dy * r, p1[2] - dz * r)
                 pointsList.append(temp)
         else:
             raise Exception("wrong paras")
@@ -243,11 +242,11 @@ class PointsTools:
         将xsect模块生成的2d点转换为3d
         """
 
-        if type(point) is not np.ndarray or point.shape[-1] != 3:
+        if type(point) is not np.ndarray or point.shape[-1] != 2:
             raise Exception("Wrong Params, point should be produced by Xsect")
         
         zero = np.zeros_like(point[:,0]).reshape(-1, 1)
-        p3d = np.hstack(zero, point)
+        p3d = np.hstack([zero, point])
         
         return p3d
 
@@ -368,7 +367,6 @@ class PointsTools:
         #     pass
 
 class Util:
-
     @staticmethod
     def TOLEQ(n1, n2):
         try:
@@ -440,8 +438,8 @@ class Util:
             item = np.array(item)
 
         if flatten is True:
-            obj = obj.reshape(1, -1)
-            item = obj.reshape(1, -1)
+            obj = obj.flatten()
+            item = item.flatten()
 
             for i in obj:
                 if i not in item:
@@ -492,18 +490,18 @@ class Util:
 class SegmentTools:
 
     @staticmethod
-    def BuildWithSettedLength(totalLen, setLen:float):
+    def BuildWithSettedLength(totalLen:float, setLen:float):
         num = int(totalLen/setLen)
         rem = totalLen - setLen * num
 
         if Util.TOLEQ(rem, 0):
-            eleLenList =  totalLen._eleLengthList = num * [setLen]
+            eleLenList = num * [setLen]
         else:
             eleLenList = num * [setLen] + [rem]
         
         return eleLenList
 
-    def BuildWithSettedNum(totalLen, n:int):
+    def BuildWithSettedNum(totalLen:float, n:int):
         l = totalLen / n
         eleLenList = [l] * n
 
@@ -627,7 +625,7 @@ class BarsTools:
             Ns_try = Ns_max.copy()
 
             while Util.TOLGT(BarsTools.calcBarsArea([Ns_try], [[As_min] * len(Ns_try)])/sectArea, r) \
-                and not Util.isOnlyHas(Ns_try, [1]):
+                and not Util.isOnlyHas(Ns_try, [1], flatten=True):
 
                 BarsTools.NsChangeByOrder(Ns_try, order, count, lambda x:x-1)
 
@@ -784,9 +782,14 @@ class BarsTools:
         if r - 0.006 < DEFVAL._TOL_ or r - 0.04 > DEFVAL._TOL_:
             raise Exception("Wrong Re-Bar Ratio")
 
+        
         c = Paras.C
         Rout = Paras.Rout - c
         Rin = Paras.Rout - Paras.T - c
+        if c < 0 or Rout < 0 or Rin < 0:
+            raise Exception('Wrong Params:{0}'.format([c, Rout, Rin]))
+        if Paras.T < DEFVAL._REBAR_D_DEF:
+            raise Exception('wrong params T too small')
         l_line = [Rout*2*np.pi, Rin*2*np.pi]
         area = attr["area"]
         # * Res:([r]:配筋率, [Ns]:钢筋的个数, [As]:钢筋的截面积)
