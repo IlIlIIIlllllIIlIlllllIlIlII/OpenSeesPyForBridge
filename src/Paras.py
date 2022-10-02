@@ -508,43 +508,43 @@ class Concrete:
     @classmethod
     @property
     def C30(cls):
-        return ConcreteParas("C30", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C30.value])
+        return ConcreteParas("C30", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C30))
 
     @classmethod
     @property
     def C35(cls):
-        return ConcreteParas("C35", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C35.value])
+        return ConcreteParas("C35", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C35.value))
 
     @classmethod
     @property
     def C40(cls):
-        return ConcreteParas("C40", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C40.value])
+        return ConcreteParas("C40", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C40.value))
 
     @classmethod
     @property
     def C45(cls):
-        return ConcreteParas("C45", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C45.value])
+        return ConcreteParas("C45", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C45.value))
 
     @classmethod
     @property
     def C50(cls):
-        return ConcreteParas("C50", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C50.value])
+        return ConcreteParas("C50", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C50.value))
 
     @classmethod
     @property
     def C55(cls):
-        return ConcreteParas("C55", **GlobalData.MaterialDataBase.Concrete[GlobalData.ConcreteType.C55.value])
+        return ConcreteParas("C55", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C55.value))
 
 class ReBar:
     @classmethod
     @property
     def HPB300(cls):
-        return SteelParas(rebarType="HPB300", **GlobalData.MaterialDataBase.Rebar[GlobalData.ReBarType.HPB300.value])
+        return SteelParas(rebarType="HPB300", **GlobalData.MaterialDataBase.Rebar(GlobalData.ReBarType.HPB300.value))
 
     @classmethod
     @property
     def HRB400(cls):
-        return SteelParas(rebarType="HRB400", **GlobalData.MaterialDataBase.Rebar[GlobalData.ReBarType.HRB400 .value])
+        return SteelParas(rebarType="HRB400", **GlobalData.MaterialDataBase.Rebar(GlobalData.ReBarType.HRB400 .value))
 
 #TODO
 class BridgeParas(Paras):

@@ -1,12 +1,20 @@
+from enum import Enum
+import imp
+from symbol import factor
+from sys import flags
 import numpy as np
 import math
 from scipy.spatial.transform import Rotation as R
+import re
 
 from .Comp import Paras
 from .GlobalData import DEFVAL, ReBarArea, ReBarType
 from .Paras import HRectSectParas, HRoundSectParas, SRoundSectParas
 from src import Comp
 #%%
+    
+
+
 class SectTools:
     @staticmethod
     def MeanSectParas(sectParas1:Paras, sectParas2:Paras):
@@ -64,6 +72,26 @@ class PointsTools:
         else:
             raise Exception("wrong paras")
         return pointsList
+    @staticmethod
+    def isInLine(p:tuple[float], lp1:tuple[float], lp2:tuple[float], ExtendLine=False):
+        v1 = PointsTools.vectSub(p, lp1)
+        v2 = PointsTools.vectSub(p, lp2)
+        n1 = PointsTools.NormOfvect(v1)
+        n2 = PointsTools.NormOfvect(v2)
+        if Util.TOLEQ(n1, 0) or Util.TOLEQ(n2, 0):
+            return True
+
+        if Util.TOLEQ(v1[0]/v2[0], v1[1]/v2[1]) and Util.TOLEQ(v1[0]/v2[0], v1[2]/v2[2]):
+            if not ExtendLine:
+                if v1[0]/v2[0] < 0:
+                    return True
+                else:
+                    return False
+            else:
+                return True
+
+
+
     @staticmethod
     def ndarray2vect(x:np.ndarray):
         return (x[0], x[1], x[2])

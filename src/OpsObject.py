@@ -1,6 +1,6 @@
 # * OpsObj类不需要有Getter和setter
 from abc import ABCMeta, abstractmethod
-from tkinter.tix import Tree
+from symbol import factor
 import numpy as np
 import openseespy.opensees as ops
 from enum import Enum
@@ -18,11 +18,15 @@ class OpsNode(Comp.OpsObj):
     def __init__(self, xyz: tuple, name=""):
         super(OpsNode, self).__init__(name)
         self._type += "->OpsNode"
-        self._xyz = xyz
+
+        self._xyz = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
 
     def _create(self):
         ops.node(self._uniqNum, *self._xyz)
-    
+    @property
+    def xyz(self):
+        return self._xyz
+
     @property
     def val(self):
         return [self._xyz]
@@ -35,7 +39,7 @@ class OpsMass(Comp.OpsObj):
         super(OpsMass, self).__init__(name)
         self._type += '->OpsMass'
         self._Node = node
-        self._mass = mass
+        self._mass = float(mass)
         if len(dof) == 6 and UtilTools.Util.isOnlyHas(dof, [0, 1, -1]):
             self._massDof = dof
     
@@ -81,10 +85,10 @@ class OpsFix(OpsBoundary):
         ops.fix(self._node.uniqNum, *self._fix)
 class OpsGemoTrans(Comp.OpsObj):
     @abstractmethod
-    def __init__(self, vecz, name=""):
+    def __init__(self, vecz:tuple[float], name=""):
         super().__init__(name)
         self._type += '->OpsGemoTrans'
-        self._vecz = np.array(vecz).tolist()
+        self._vecz = np.array(vecz).astype(np.float64).tolist()
     
     @abstractmethod
     def _create(self):
@@ -316,11 +320,11 @@ class OpsBoxSection(OpsSection):
                 self._material._E,
                 self._attr["area"],
                 self._attr['inertia_x'],
-                self._attr['inertia_y'],
+                self._attr['interia_y'],
                 self._material._G,
-                self._attr['inertia_j'],
-                alphaY=None,
-                alphaZ=None,
+                self._attr['interia_j'],
+                # alphaY=None,
+                # alphaZ=None,
             )
 
 class OpsHRoundFiberSection(OpsSection):
@@ -412,6 +416,7 @@ class OpsSRoundFiberSection(OpsSection):
         self._Rebar = rebar
         self._FiberSize = fiberSize
 
+    @property
     def val(self):
         return [self._R, self._C, self._SectAttr, self._RebarDistr, self._CoreCon, self._CoverCon, self._Rebar, self._FiberSize]
 
@@ -533,6 +538,15 @@ class OpsElement(Comp.OpsObj, metaclass=ABCMeta):
         self._Sect = sect
         self._Transf = transf
 
+    @property
+    def NodeI(self):
+        return self._Node1
+    @property
+    def NodeJ(self):
+        return self._Node2
+    @property
+    def Sect(self):
+        return self._Sect
     @abstractmethod
     def _create(self):
         ...
@@ -561,6 +575,12 @@ class OpsZLElement(OpsElement):
         ops.element('zeroLength', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, 
                     '-mat', *self._m, '-dir', *self._dirs)
 
+    @property
+    def NodeI(self):
+        return self._Node1
+    @property
+    def NodeJ(self):
+        return self._Node2
 
 class OpsEBCElement(OpsElement):
     """
@@ -582,6 +602,16 @@ class OpsEBCElement(OpsElement):
         return [self._Node1, self._Node2, self._Sect, self._localZ, self._transf]
         """
         return [self._Node1, self._Node2, self._Sect,  self._Transf]
+
+    @property
+    def NodeI(self):
+        return self._Node1
+    @property
+    def NodeJ(self):
+        return self._Node2
+    @property
+    def Sect(self):
+        return self._Sect
 
     def _create(self):
         ops.element(
@@ -608,6 +638,16 @@ class OpsNBCElement(OpsElement):
         self._intgrType = IntgrType
 
     @property
+    def NodeI(self):
+        return self._Node1
+    @property
+    def NodeJ(self):
+        return self._Node2
+    @property
+    def Sect(self):
+        return self._Sect
+
+    @property
     def val(self):
         """
         return [self._node1, self._node2, self._sect, self._localZ, self._trans] 
@@ -618,7 +658,7 @@ class OpsNBCElement(OpsElement):
         # element('nonlinearBeamColumn', eleTag, *eleNodes, numIntgrPts, 
         # secTag, transfTag, '-iter', maxIter=10, tol=1e-12, '-mass', mass=0.0, 
         # '-integration', intType)
-        ops.element('nonlinearBeamColumn', self._uniqNum, *self._Node1.uniqNum, *self._Node2.uniqNum, 
+        ops.element('nonlinearBeamColumn', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, 
                     self._intgrN, self._Sect.uniqNum, self._Transf.uniqNum, '-iter', self._maxIer, self._tol,
                     '-mass', self._mass, '-itegration', self._intgrType)
 
@@ -663,21 +703,35 @@ class OpsPathTimeSerise(OpsTimeSeries):
     def _create(self):
     # timeSeries('Path', tag, '-dt', dt=0.0, '-values', *values, '-time', *time, '-filePath', filePath='', '-fileTime', fileTime='', '-factor', factor=1.0, '-startTime', startTime=0.0, '-useLast', '-prependZero')
         ops.timeSeries('Path', self._uniqNum, '-values', *self._values, '-time', *self._times)
+    
+    @property
+    def val(self):
+        return [self._times, self._values]
 
 class OpsTimeSeriesEnum(Enum):
-    Linear = OpsLinearTimeSerise()
-    Const = OpsConstTimeSeries()
+    Linear = 'Linear'
+    Const = 'Const'
 
 
 class OpsPlainLoadPattern(Comp.OpsObj):
     @Comp.CompMgr()
-    def __init__(self, timeseries:OpsTimeSeries=OpsTimeSeriesEnum.Linear.value, name=""):
+    def __init__(self, timeseriesType:OpsTimeSeriesEnum=OpsTimeSeriesEnum.Linear, name=""):
         super().__init__(name)
         self._type += '->OpsPlainPattern'
+        if timeseriesType == OpsTimeSeriesEnum.Linear:
+            timeseries = OpsLinearTimeSerise()
+        elif timeseriesType == OpsTimeSeriesEnum.Const:
+            timeseries = OpsConstTimeSeries()
+        else:
+            raise Exception("unexcepted params:{}".format(timeseriesType))
+
         self._timeseries = timeseries
     
     def _create(self):
         ops.pattern('Plain', self._uniqNum, self._timeseries.uniqNum)
+    
+    def val(self):
+        return [self._timeseries]
 
 
 class OpsMSELoadPattern(Comp.OpsObj):
@@ -756,7 +810,7 @@ class OpsSP(OpsPlainLoads):
 
 class OpsPlainGroundMotion(Comp.OpsObj):
     @Comp.CompMgr()
-    def __init__(self, dispTimeHist:OpsPathTimeSerise=None, velTimeHist:OpsPathTimeSerise=None, accTimeHist:OpsPathTimeSerise=None, name=""):
+    def __init__(self, dispTimeHist:OpsPathTimeSerise=None, velTimeHist:OpsPathTimeSerise=None, accTimeHist:OpsPathTimeSerise=None, factor:float=1.0, name=""):
         super().__init__(name)
         self._type += '->OpsPlain Ground Motion'
 
@@ -766,6 +820,7 @@ class OpsPlainGroundMotion(Comp.OpsObj):
         self._disp = dispTimeHist
         self._vel = velTimeHist
         self._acc = accTimeHist
+        self._factor = factor
         
 
     def _args(self):
@@ -783,7 +838,7 @@ class OpsPlainGroundMotion(Comp.OpsObj):
 
     def _create(self):
         # groundMotion(gmTag, 'Plain', '-disp', dispSeriesTag, '-vel', velSeriesTag, '-accel', accelSeriesTag, '-int', tsInt='Trapezoidal', '-fact', factor=1.0)
-        ops.groundMotion(self._uniqNum, 'Plain', *self._args())
+        ops.groundMotion(self._uniqNum, 'Plain', *self._args(), '-fact', self._factor)
     
     @property
     def val(self):

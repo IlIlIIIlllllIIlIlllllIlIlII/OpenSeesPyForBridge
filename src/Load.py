@@ -1,12 +1,16 @@
 from abc import ABCMeta, abstractmethod
-from sys import flags
-from time import time
+from dataclasses import dataclass
+import re
+import numpy as np
+import pathlib
+import openseespy.opensees as ops
 
 from . import OpsObject
 from . import GlobalData
 from . import Comp
 from . import Part
 from . import UtilTools
+from .log import *
 
 class StaticLoads(Comp.Loads, metaclass = ABCMeta):
     @abstractmethod
@@ -33,7 +37,7 @@ class PointLoads(StaticLoads):
         return [self._Load, self._Node]
 
 class ElementsLoads(StaticLoads):
-    def __init__(self, ele:Part.Segment, wx:float=0.0, wy:float=0.0, wz:flags=0.0, GlobalCoordSys:bool=True, name=""):
+    def __init__(self, ele:Part.Segment, wx:float=0.0, wy:float=0.0, wz:float=0.0, GlobalCoordSys:bool=True, name=""):
         super().__init__(name)
         self._Elements = ele
 
@@ -98,20 +102,121 @@ class DynamicLoads(Comp.Loads, metaclass = ABCMeta):
     @abstractmethod
     def _OpsLoadBuild(self):
         ...
+    
+@dataclass
+class WaveInformation:
+    station:str
+    place:str
+    time:str
+
+class SeismicWave(Comp.Component):
+    def __init__(self, dt, accX:list[float]=[], factorX:float=1, accY:list[float]=[], factorY:float=1, accZ:list[float]=[], factorZ:float=1, accInformation:WaveInformation=None, name="") -> None:
+        super().__init__(name)
+        self._information = accInformation
+        maxlen = max(len(accX), len(accY), len(accZ))
+
+        if maxlen == 0:
+            message = 'accX, accY, accZ can not be 0 at same time'
+            logger.fatal(message)
+            raise Exception(message)
+
+        message = "Param: {} is ignored as its length are less than maxinum, {} is also ingnored"
+        self._factors= [factorX, factorY, factorZ]
+
+        if maxlen == len(accX):
+            self._accX = accX
+        else:
+            logger.warning(message.format('accX', 'factorX'))
+            self._accX = None
+        if maxlen == len(accY):
+            self._accY = accY
+        else:
+            logger.warning(message.format('accY', 'factorY'))
+            self._accY = None
+        if maxlen == len(accZ):
+            self._accZ = accZ
+        else:
+            logger.warning(message.format('accZ', 'factorZ'))
+            self._accZ = None
+        
+        self._times = [x*dt for x in range(maxlen)]
+
+        self._OpsGroundMotions = self._OpsGroundMotionBuild()
+    
+    def _OpsGroundMotionBuild(self):
+        # accX = OpsObject.OpsPathTimeSerise(self._times, self._accX)
+        # vel = OpsObject.OpsPathTimeSerise(self._times, self._accY)
+        # disp = OpsObject.OpsPathTimeSerise(self._times, self._accZ)
+        GMs:list[OpsObject.OpsPlainGroundMotion] = []
+        for acc, f in zip([self._accX, self._accY, self._accZ], self._factors):
+            if acc:
+                GMs.append(OpsObject.OpsPlainGroundMotion(self._times, acc, factor=f))
+            else:
+                GMs.append(None)
+        return GMs
+    
+    # @staticmethod
+    # def LoadRecordFromPEERFile(filePath):
+
+    #     path = pathlib.Path(filePath)
+    #     if not path.exists():
+    #         logger.warning("Path:{} is not exists".format(path))
+    #         return None
+        
+
+    
+    @staticmethod
+    def LoadACCFromPEERFile(filePath):
+        path = pathlib.Path(filePath)
+        if not path.exists():
+            logger.warning("Path:{} is not exists".format(path))
+            return None
+    
+        with open(filePath) as f:
+
+            f.readline()
+
+            x = f.readline()
+            x = x.split(',')
+            recordStation= x[0]
+            recordTime = x[1]
+            recordPlace = x[2]
+
+            x = f.readline()
+            x = x.split(' ')
+            recordType = x[0]
+            recordUnit = x[-1][:-1]
+            if recordType != 'ACCELERATION' and recordUnit != 'G':
+                logger.warning('Record type: {}, record unit: {} is not supported now, return None')
+                return None
+
+            x = f.readline()
+            npts = re.findall(r'(?:NPTS=[ ]+?)(\d+)', x)
+            npts = int(npts[0])
+            dt = re.findall(r'(?:DT=[ ]+?)(\.\d+)', x)
+            dt = float(dt[0])
+
+            x = f.read()
+            acc = re.findall(r'[-]?\.\d+E[+|-]\d+', x)
+            acc =np.array(acc).reshape((1, -1))
+            information = WaveInformation(recordStation, recordPlace, recordTime)
+            if len(acc) != npts:
+                logger.warning('npts {} is not equal to the length of accdata {}, the npts is ignored')
+    
+        return acc, information 
 
 class EarthquakeLoads(Comp.Loads):
-    def __init__(self, node, times:list[float], acc:list[float], vecl:list[float], disp:list[float], name=""):
+    def __init__(self, node:Part.BridgeNode, seismicWave:SeismicWave, name=""):
         super().__init__(name)
-        self._times = times
-        self._acc = acc
-        self._vecl = vecl
-        self._disp = disp
-    
+        self._node = node
+        self._seismicWave = seismicWave
+
     def _OpsLoadBuild(self):
-        acc = OpsObject.OpsPathTimeSerise(self._times, self._acc)
-        vel = OpsObject.OpsPathTimeSerise(self._times, self._vecl)
-        disp = OpsObject.OpsPathTimeSerise(self._times, self._disp)
-        OpsObject.OpsPlainGroundMotion(disp, vel, acc)
+        for dof, opsGM in enumerate(self._seismicWave._OpsGroundMotions):
+            if opsGM:
+                ops.imposedMotion(self._node.OpsNode.uniqNum, dof, opsGM.uniqNum)
+
+            
     
     @property
     def val(self):
