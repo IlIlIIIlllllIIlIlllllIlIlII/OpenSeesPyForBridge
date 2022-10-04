@@ -1,8 +1,15 @@
-
 import logging
-logger = logging.getLogger()
-logger.setLevel(logging.WARNING)
+StandardLogger = logging.getLogger("Stande")
+StandardLogger.setLevel(logging.WARNING)
 shandler = logging.StreamHandler()
 format = logging.Formatter('%(name)s %(asctime)s {%(levelname)s}:%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 shandler.setFormatter(format)
-logger.addHandler(shandler)
+StandardLogger.addHandler(shandler)
+
+OpsCommandLogger = logging.getLogger("OpsCommand")
+OpsCommandLogger.setLevel(logging.INFO)
+fhandler = logging.FileHandler('.\OpsCommand.opsc', mode='w')
+format = logging.Formatter('%(message)s')
+fhandler.setFormatter(format)
+OpsCommandLogger.addHandler(fhandler)
+OpsCommandLogger.info("import openseespy.opensees as ops")

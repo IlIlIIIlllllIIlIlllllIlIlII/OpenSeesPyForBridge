@@ -109,7 +109,7 @@ class SectRebarDistrParas(Paras):
     __slots__ = ['_type', '_uniqNum', '_name', '_r', '_Ns', '_barArea']
     def __init__(self, r: float, Ns: list[int], barArea: list[GlobalData.ReBarArea], name=""):
         super(SectRebarDistrParas, self).__init__(name)
-        self._type += "->SectRebarParas"
+        self._type += "->Section Rebars distribution Parameters"
         self._r = r
         self._Ns = Ns
         self._barArea = barArea
@@ -150,6 +150,7 @@ class SectRebarDistrParas(Paras):
         return [self.r, self.Ns, self.barArea]
         """
         return [self._r, self._Ns, self._barArea]
+
 class SRoundSectParas(SectParas):
     def __init__(self, R:float, cover:float = GlobalData.DEFVAL._COVER_DEF, name=""):
         super().__init__(name)
@@ -513,39 +514,48 @@ class Concrete:
     @classmethod
     @property
     def C35(cls):
-        return ConcreteParas("C35", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C35.value))
+        return ConcreteParas("C35", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C35))
 
     @classmethod
     @property
     def C40(cls):
-        return ConcreteParas("C40", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C40.value))
+        return ConcreteParas("C40", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C40))
 
     @classmethod
     @property
     def C45(cls):
-        return ConcreteParas("C45", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C45.value))
+        return ConcreteParas("C45", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C45))
 
     @classmethod
     @property
     def C50(cls):
-        return ConcreteParas("C50", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C50.value))
+        return ConcreteParas("C50", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C50))
 
     @classmethod
     @property
     def C55(cls):
-        return ConcreteParas("C55", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C55.value))
+        return ConcreteParas("C55", **GlobalData.MaterialDataBase.Concrete(GlobalData.ConcreteType.C55))
 
 class ReBar:
     @classmethod
     @property
-    def HPB300(cls):
-        return SteelParas(rebarType="HPB300", **GlobalData.MaterialDataBase.Rebar(GlobalData.ReBarType.HPB300.value))
+    def HRB500(cls):
+        return SteelParas(rebarType="HPB300", **GlobalData.MaterialDataBase.Rebar(GlobalData.ReBarType.HRB500))
+
+    @classmethod
+    @property
+    def HRBF500(cls):
+        return SteelParas(rebarType="HRBF500", **GlobalData.MaterialDataBase.Rebar(GlobalData.ReBarType.HRBF500))
 
     @classmethod
     @property
     def HRB400(cls):
-        return SteelParas(rebarType="HRB400", **GlobalData.MaterialDataBase.Rebar(GlobalData.ReBarType.HRB400 .value))
+        return SteelParas(rebarType="HRB400", **GlobalData.MaterialDataBase.Rebar(GlobalData.ReBarType.HRB400))
 
+    @classmethod
+    @property
+    def HRBF400(cls):
+        return SteelParas(rebarType="HRBF400", **GlobalData.MaterialDataBase.Rebar(GlobalData.ReBarType.HRBF400))
 #TODO
 class BridgeParas(Paras):
     def __init__(self, name: str = ""):

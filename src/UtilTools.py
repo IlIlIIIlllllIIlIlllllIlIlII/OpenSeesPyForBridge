@@ -834,10 +834,13 @@ class BarsTools:
     def NsChangeByOrder(Ns:list[int], order:list, count:int, func):
         index = order[count]
         if type(index) is int:
-            if Ns[index] == 1:
-                return
-            else:
-                Ns[index] = func(Ns[index])
+            Ns[index] = func(Ns[index])
+            if Ns[index] <= 0:
+                Ns[index] = 1
+            # if Ns[index] == 1:
+            #     return
+            # else:
+            #     Ns[index] = func(Ns[index])
         elif type(index) is list or type(index) is tuple:
             for i in index:
                 if Ns[i] == 1:

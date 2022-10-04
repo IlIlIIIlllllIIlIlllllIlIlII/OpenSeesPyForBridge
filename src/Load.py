@@ -109,6 +109,9 @@ class WaveInformation:
     place:str
     time:str
 
+    dt:float
+    npts:int
+
 class SeismicWave(Comp.Component):
     def __init__(self, dt, accX:list[float]=[], factorX:float=1, accY:list[float]=[], factorY:float=1, accZ:list[float]=[], factorZ:float=1, accInformation:WaveInformation=None, name="") -> None:
         super().__init__(name)
@@ -117,7 +120,7 @@ class SeismicWave(Comp.Component):
 
         if maxlen == 0:
             message = 'accX, accY, accZ can not be 0 at same time'
-            logger.fatal(message)
+            StandardLogger.fatal(message)
             raise Exception(message)
 
         message = "Param: {} is ignored as its length are less than maxinum, {} is also ingnored"
@@ -126,17 +129,17 @@ class SeismicWave(Comp.Component):
         if maxlen == len(accX):
             self._accX = accX
         else:
-            logger.warning(message.format('accX', 'factorX'))
+            StandardLogger.warning(message.format('accX', 'factorX'))
             self._accX = None
         if maxlen == len(accY):
             self._accY = accY
         else:
-            logger.warning(message.format('accY', 'factorY'))
+            StandardLogger.warning(message.format('accY', 'factorY'))
             self._accY = None
         if maxlen == len(accZ):
             self._accZ = accZ
         else:
-            logger.warning(message.format('accZ', 'factorZ'))
+            StandardLogger.warning(message.format('accZ', 'factorZ'))
             self._accZ = None
         
         self._times = [x*dt for x in range(maxlen)]
@@ -149,7 +152,7 @@ class SeismicWave(Comp.Component):
         # disp = OpsObject.OpsPathTimeSerise(self._times, self._accZ)
         GMs:list[OpsObject.OpsPlainGroundMotion] = []
         for acc, f in zip([self._accX, self._accY, self._accZ], self._factors):
-            if acc:
+            if acc is not None:
                 GMs.append(OpsObject.OpsPlainGroundMotion(self._times, acc, factor=f))
             else:
                 GMs.append(None)
@@ -169,7 +172,7 @@ class SeismicWave(Comp.Component):
     def LoadACCFromPEERFile(filePath):
         path = pathlib.Path(filePath)
         if not path.exists():
-            logger.warning("Path:{} is not exists".format(path))
+            StandardLogger.warning("Path:{} is not exists".format(path))
             return None
     
         with open(filePath) as f:
@@ -187,7 +190,7 @@ class SeismicWave(Comp.Component):
             recordType = x[0]
             recordUnit = x[-1][:-1]
             if recordType != 'ACCELERATION' and recordUnit != 'G':
-                logger.warning('Record type: {}, record unit: {} is not supported now, return None')
+                StandardLogger.warning('Record type: {}, record unit: {} is not supported now, return None'.format(recordType, recordUnit))
                 return None
 
             x = f.readline()
@@ -198,10 +201,11 @@ class SeismicWave(Comp.Component):
 
             x = f.read()
             acc = re.findall(r'[-]?\.\d+E[+|-]\d+', x)
-            acc =np.array(acc).reshape((1, -1))
-            information = WaveInformation(recordStation, recordPlace, recordTime)
-            if len(acc) != npts:
-                logger.warning('npts {} is not equal to the length of accdata {}, the npts is ignored')
+            acc =np.array(acc).reshape((1, -1)).astype(np.float32)
+            
+            information = WaveInformation(recordStation, recordPlace, recordTime, dt, npts)
+            if acc.shape[1] != npts:
+                StandardLogger.warning('npts {} is not equal to the length of accdata {}, the npts is ignored'.format(npts, len(acc)))
     
         return acc, information 
 
@@ -214,10 +218,11 @@ class EarthquakeLoads(Comp.Loads):
     def _OpsLoadBuild(self):
         for dof, opsGM in enumerate(self._seismicWave._OpsGroundMotions):
             if opsGM:
+                OpsCommandLogger.info('ops.imposedMotion({}, {}, {}})'.format(self._node.OpsNode.uniqNum, dof, opsGM.uniqNum))
                 ops.imposedMotion(self._node.OpsNode.uniqNum, dof, opsGM.uniqNum)
 
             
     
     @property
     def val(self):
-        return [self._times, self._acc, self._vecl, self._disp]
+        return [self._node, self._seismicWave]

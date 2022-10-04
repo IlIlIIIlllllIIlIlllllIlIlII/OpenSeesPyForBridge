@@ -1,8 +1,8 @@
-from sys import stdout
 import numpy as np
 import openseespy.opensees as ops
 from abc import ABCMeta, abstractmethod
 from .GlobalData import DEFVAL
+from .log import *
 
 
 
@@ -38,6 +38,7 @@ class CompMgr:
     _uniqNum = 0
     _compDic: dict = {}
     _allComp: list[Component] = []
+    OpsCommandLogger.info('ops.model(\'{}\', \'{}\', {}, \'{}\', {})'.format("basic", "-ndm", 3, "-ndf", 6))
     ops.model("basic", "-ndm", 3, "-ndf", 6)
 
     @classmethod
@@ -61,6 +62,8 @@ class CompMgr:
             if comp._name != "" and comp._name != exists_comp:
                 cls.addCompName(comp._name, comp._uniqNum)
         return Wrapper
+
+
 
     @classmethod
     def findSameValueComp(cls, tarComp: Component):
@@ -114,6 +117,7 @@ class CompMgr:
         cls._allComp:list[Component] = []
         cls._compDic = {}
         cls._uniqNum = 0
+        OpsCommandLogger.info('ops.wipe()'.format())
         ops.wipe()
 
     @classmethod
@@ -122,13 +126,22 @@ class CompMgr:
         return str("当前共有组件:{}个\n组件字典为:{}".format(len(cls._allComp), cls._compDic))
 
     @classmethod
-    def getCompbyName(cls, name):
-        if name in cls._compDic.keys():
-            index = cls._compDic[name]
-            return cls._allComp[index - 1]
-        else:
-            print("No Component")
-            return None
+    def getCompbyName(cls, name, compClass:Component):
+        for comp in cls._allComp:
+            if isinstance(comp, compClass):
+                if comp._name == name:
+                    return True, comp
+            
+        return False, None
+
+    @classmethod
+    def getCompByUniqNum(cls, uniqNum, compClass:Component):
+        for comp in cls._allComp:
+            if isinstance(comp, compClass):
+                if comp._uniqNum == uniqNum:
+                    return True, comp
+        
+        return False, None
 
 class OpsObj(Component, metaclass=ABCMeta):
     @abstractmethod
@@ -193,5 +206,5 @@ class Loads(Component, metaclass=ABCMeta):
 
     def ApplyLoad(self):
         self._OpsLoadBuild()
-class HRectSect():
-    ...
+# class HRectSect():
+#     ...

@@ -1,8 +1,6 @@
-from ctypes import Union
-from enum import Flag
-from stat import FILE_ATTRIBUTE_REPARSE_POINT
+from enum import Enum
+from typing import overload
 import xsect
-import math
 from abc import ABCMeta, abstractmethod
 import numpy as np
 
@@ -11,6 +9,7 @@ from . import GlobalData
 from . import Paras
 from . import OpsObject
 from . import UtilTools
+from .log import *
 
 
 class BridgeNode(Comp.Parts):
@@ -748,12 +747,19 @@ class HRectRCSect(RCCrossSect):
         #     raise Exception("Exist Undefined Member")
 
 class Segment(Comp.Parts):
+    class SupportedElementType(Enum):
+        NonlinearBeamColumnElement = 'NBCE'
+        ElasticBeamColumnElement = 'EBCE'
+        # ZeroLengthElement = 'ZLE'
+
     @abstractmethod
     def __init__(self, point_i:tuple[float, ...], point_j:tuple[float, ...], 
                        SectParas_i:Paras.SectParas, SectParas_j:Paras.SectParas,
+                       elementType:SupportedElementType,
                        power:float,
                        localZ:tuple[float],
                        eleLengthList:list[float],
+                       eleDictParams:dict ={},
                        name=""):
         super(Segment, self).__init__(name)
         self._Ni:BridgeNode = BridgeNode(*point_i)
@@ -761,6 +767,9 @@ class Segment(Comp.Parts):
 
         self._Secti:Paras.SectParas = SectParas_i
         self._Sectj:Paras.SectParas = SectParas_j
+
+        self._ElementType = elementType
+        self._ElementDictParams = eleDictParams
 
         self._p:float = power
         self._localXAxis:np.ndarray = UtilTools.PointsTools.vectSub(self._Ni.point, self._Nj.point)
@@ -790,6 +799,24 @@ class Segment(Comp.Parts):
     @abstractmethod
     def _Build():
         ...
+    @overload
+    def BuildElement(cls, elementType:SupportedElementType, node1:OpsObject.OpsNode, node2: OpsObject.OpsNode, sec: OpsObject.OpsSection, localZ: tuple, name="") -> OpsObject.OpsEBCElement:...
+    @overload
+    def BuildElement(cls, elementType:SupportedElementType, node1:OpsObject.OpsNode, node2:OpsObject.OpsNode, sect:OpsObject.OpsBoxSection, localZ:tuple[int],IntgrNum:int=5, maxIter=10, tol:float=1e-12, mass:float=0.0, IntgrType:str="Lobatto", name="") -> OpsObject.OpsNBCElement:...
+
+    # @classmethod
+    def BuildElement(cls, elementType:SupportedElementType, *args, **kwargs):
+        
+        if elementType == cls.SupportedElementType.ElasticBeamColumnElement:
+            ele = OpsObject.OpsEBCElement(*args, **kwargs)
+        elif elementType == cls.SupportedElementType.NonlinearBeamColumnElement:
+            ele = OpsObject.OpsNBCElement(*args, **kwargs)
+        else:
+            message = 'Unsupport Element Type'
+            StandardLogger.error(message)
+            raise Exception(message)
+        
+        return ele
 
     @property
     def ELeList(self):
@@ -838,7 +865,6 @@ class Segment(Comp.Parts):
             self._eleLengthList = newVal
         else:
             raise Exception("Wrong Paras")
-    
 
 class LineBoxSeg(Segment):
     __slots__ = []
@@ -855,12 +881,15 @@ class LineBoxSeg(Segment):
     @Comp.CompMgr()
     def __init__(self, node_i:BridgeNode, node_j:BridgeNode, 
                        SectParas_i:Paras.BoxSectParas, SectParas_j:Paras.BoxSectParas, 
+                       elementType:Segment.SupportedElementType,
                        con:Paras.ConcreteParas,
                        localZ:tuple[int],
                        eleLengthList:list[float],
-                       power:float, name=""):
+                       power:float, 
+                       eleDictParams:dict={},
+                       name=""):
 
-        super(LineBoxSeg, self).__init__(node_i, node_j, SectParas_i, SectParas_j, power, localZ, eleLengthList, name)
+        super(LineBoxSeg, self).__init__(node_i, node_j, SectParas_i, SectParas_j, elementType, power, localZ, eleLengthList, eleDictParams, name)
         self._con = con
         self._BridgeNodeList, self._SegSectList, self._SegMassList, self._SegElementList = self._Build()
 
@@ -903,11 +932,12 @@ class LineBoxSeg(Segment):
                 l_mass.append(mass)
                 l_node[i].addMass(mass/2)
                 l_node[i+1].addMass(mass/2)
-                ele = OpsObject.OpsEBCElement(l_node[i].OpsNode, 
-                                    l_node[i+1].OpsNode,
-                                    l_sect[i].OpsSect,
-                                    self._localZAxis
-                                    )
+                ele = self.BuildElement(self._ElementType, l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, **self._ElementDictParams) 
+                # ele = OpsObject.OpsEBCElement(l_node[i].OpsNode, 
+                #                     l_node[i+1].OpsNode,
+                #                     l_sect[i].OpsSect,
+                #                     self._localZAxis
+                #                     )
 
                 l_element.append(ele) 
             
@@ -1014,12 +1044,12 @@ class LineBoxSeg(Segment):
     
     @property
     def val(self):
-        return [self._Ni, self._Nj, self._Secti, self._Sectj, self._con, self._localZAxis, self._eleLengthList, self._p]
+        return [self._Ni, self._Nj, self._Secti, self._Sectj, self._ElementType, self._con, self._localZAxis, self._eleLengthList, self._p]
 # 
 class LineHRoundSeg(Segment):
     @Comp.CompMgr()
-    def __init__(self, point_i: tuple[float, ...], point_j: tuple[float, ...], SectParas_i:Paras.HRoundSectParas, SectParas_j:Paras.HRoundSectParas, ConCore:Paras.ConcreteParas, ConCover:Paras.ConcreteParas, Rebar:Paras.SteelParas, eleLengthList: list[float], RebarRList:list[float]=None, RebarDistrParasList:list[Paras.SectRebarDistrParas]=None, localZ: tuple[float]=None, name=""):
-        super().__init__(point_i, point_j, SectParas_i, SectParas_j, 1, localZ, eleLengthList, name)
+    def __init__(self, point_i: tuple[float, ...], point_j: tuple[float, ...], SectParas_i:Paras.HRoundSectParas, SectParas_j:Paras.HRoundSectParas, elementType:Segment.SupportedElementType, ConCore:Paras.ConcreteParas, ConCover:Paras.ConcreteParas, Rebar:Paras.SteelParas, eleLengthList: list[float], RebarRList:list[float]=None, RebarDistrParasList:list[Paras.SectRebarDistrParas]=None, localZ: tuple[float]=None, elemetDictParam:dict={}, name=""):
+        super().__init__(point_i, point_j, SectParas_i, SectParas_j, elementType, 1, localZ, eleLengthList, elemetDictParam, name)
         self._CoreCon = ConCore
         self._CoverCon = ConCover
         self._Rebar = Rebar
@@ -1041,6 +1071,7 @@ class LineHRoundSeg(Segment):
             SectJ:Paras.HRoundSectParas = self._Sectj
 
             T = UtilTools.SegmentTools.PowerParasBuilder(SectI.T, SectJ.T, self._totalLen, 1, self._eleLengthList)
+            
 
             Rout = UtilTools.SegmentTools.PowerParasBuilder(SectI.Rout, SectJ.Rout, self._totalLen, 1, self._eleLengthList)
 
@@ -1070,12 +1101,13 @@ class LineHRoundSeg(Segment):
                 l_mass.append(mass)
                 l_node[i].addMass(mass/2)
                 l_node[i+1].addMass(mass/2)
-
-                ele = OpsObject.OpsEBCElement(l_node[i].OpsNode, 
-                                    l_node[i+1].OpsNode,
-                                    l_sect[i].OpsSect,
-                                    self._localZAxis
-                                    )
+                
+                ele = self.BuildElement(self._ElementType, l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, **self._ElementDictParams)
+                # ele = OpsObject.OpsEBCElement(l_node[i].OpsNode, 
+                #                     l_node[i+1].OpsNode,
+                #                     l_sect[i].OpsSect,
+                #                     self._localZAxis
+                #                     )
 
                 l_element.append(ele) 
 
@@ -1165,8 +1197,8 @@ class LineHRoundSeg(Segment):
 
 class LineSRoundSeg(Segment):
     @Comp.CompMgr()
-    def __init__(self, node_i: BridgeNode, node_j: BridgeNode, SectParas_i: Paras.SRoundSectParas, SectParas_j: Paras.SRoundSectParas, ConCore:Paras.ConcreteParas, ConCover:Paras.ConcreteParas, Rebar:Paras.SteelParas, eleLengthList: list[float], RebarRList:list[float]=None, RebarDistrParasList:list[Paras.SectRebarDistrParas]=None, localZ: tuple[float]=None, name=""):
-        super().__init__(node_i, node_j, SectParas_i, SectParas_j, 1, localZ, eleLengthList, name)
+    def __init__(self, node_i: tuple[float, ...], node_j: tuple[float, ...], SectParas_i: Paras.SRoundSectParas, SectParas_j: Paras.SRoundSectParas, elementType:Segment.SupportedElementType, ConCore:Paras.ConcreteParas, ConCover:Paras.ConcreteParas, Rebar:Paras.SteelParas, eleLengthList: list[float], RebarRList:list[float]=None, RebarDistrParasList:list[Paras.SectRebarDistrParas]=None, localZ: tuple[float]=None, eleDictParams:dict={}, name=""):
+        super().__init__(node_i, node_j, SectParas_i, SectParas_j, elementType, 1, localZ, eleLengthList, eleDictParams, name)
         self._CoreCon = ConCore
         self._CoverCon = ConCover
         self._Rebar = Rebar
@@ -1200,7 +1232,7 @@ class LineSRoundSeg(Segment):
             node = BridgeNode(*p, 0.0)
             l_node.append(node)
 
-        for r  in R:
+        for r in R:
             paras = Paras.SRoundSectParas(r)
             l_paras.append(paras)
 
@@ -1222,7 +1254,8 @@ class LineSRoundSeg(Segment):
             #                     l_sect[i].OpsSect,
             #                     self._localZAxis
             #                     )
-            ele = OpsObject.OpsNBCElement(l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, 5)
+            ele = self.BuildElement(self._ElementType, l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, **self._ElementDictParams)
+            # ele = OpsObject.OpsNBCElement(l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, 5)
 
             l_element.append(ele) 
         

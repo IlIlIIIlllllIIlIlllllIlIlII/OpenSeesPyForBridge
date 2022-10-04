@@ -1,4 +1,3 @@
-from asyncio.log import logger
 from enum import Enum
 
 from . import Unit
@@ -114,89 +113,75 @@ class ConcreteType(Enum):
 
 
 class ReBarType(Enum):
-    HPB300 = "HPB300"
-    HRB400 = "HRB400"
+    HRB400 = "HPB400"
+    HRB500 = "HRB500"
+    HRBF400 = "HRBF400" 
+    HRBF500 = "HRBF500"
+
+
 class MaterialDataBase:
     @classmethod    
-    @property
     def Rebar(cls, type:ReBarType):
         # * fy, e0, b, *params, a1=a2*fy/e0, a2=1.0, a3=a4*fy/e0, a4=1.0, siginit=0.0
         fy, e0, b, R0, R1, R2 =  0, 0, 0.01, 15, 0.925, 0.15 
-        if type == ReBarType.HPB300:
-            fy = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            e0 = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-        elif type == ReBarType.HRB400:
-            fy = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            e0 = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
+        if type == ReBarType.HRB500 or type == ReBarType.HRBF500:
+            fy = Unit.ConvertToBaseUnit(435, 'N/mm/mm')
+            e0 = Unit.ConvertToBaseUnit(2.00, '10')
+        elif type == ReBarType.HRB400 or type == ReBarType.HRBF400:
+            fy = Unit.ConvertToBaseUnit(370, 'N/mm/mm')
+            e0 = Unit.ConvertToBaseUnit(2.00, '1e5*N/mm/mm')
         else:
-            logger.warning("RebarType:{} are not finished".format(type.value))
+            StandardLogger.warning("RebarType:{} are not finished".format(type.value))
             raise Exception("RebarType:{} are not finished".format(type.value))
 
         return {"fy": fy, "E0": e0, "b": b, "R0": R0, "R1": R1, "R2": R2}
 
     
     @classmethod
-    @property
     def Concrete(cls, type:ConcreteType):
-        fpc, epsc0, fpcu, epsu, Lambda, ft, ets, dens = 0, 0, 0, 0, 0, 0, 0
+        fpc, epsc0, fpcu, epsu, Lambda, ft, ets, dens = 0, 0, 0, 0, 0, 0, 0, 0
         if type == ConcreteType.C30:
-            fpc = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsc0 = 0.001
-            fpcu = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsu = 0.001
-            Lambda = 0.001
-            ft = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            ets = Unit.ConvertToBaseUnit*(10000, '1000000*kg/s')
-            dens = Unit.ConvertToBaseUnit(10000, 'kg/m/m/m')
+            fck = Unit.ConvertToBaseUnit(-30, 'mpa')
+            E = Unit.ConvertToBaseUnit(3.00, '1e4*N/mm/mm')
+            dens = Unit.ConvertToBaseUnit(2.385, '1e3*kg/m/m/m')
+
         elif type == ConcreteType.C35:
-            fpc = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsc0 = 0.001
-            fpcu = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsu = 0.001
-            Lambda = 0.001
-            ft = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            ets = Unit.ConvertToBaseUnit*(10000, '1000000*kg/s')
-            dens = Unit.ConvertToBaseUnit(10000, 'kg/m/m/m')
+            fck = Unit.ConvertToBaseUnit(35, 'mpa')
+            E = Unit.ConvertToBaseUnit(3.15, '1e4*N/mm/mm')
+            dens = Unit.ConvertToBaseUnit(2.39, '1e3*kg/m/m/m')
+
         elif type == ConcreteType.C40:
-            fpc = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsc0 = 0.001
-            fpcu = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsu = 0.001
-            Lambda = 0.001
-            ft = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            ets = Unit.ConvertToBaseUnit*(10000, '1000000*kg/s')
-            dens = Unit.ConvertToBaseUnit(10000, 'kg/m/m/m')
+            fck = Unit.ConvertToBaseUnit(40, 'mpa')
+            E = Unit.ConvertToBaseUnit(3.25, '1e4*N/mm/mm')
+            dens = Unit.ConvertToBaseUnit(2.4, '1e3*kg/m/m/m')
+
         elif type == ConcreteType.C45:
-            fpc = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsc0 = 0.001
-            fpcu = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsu = 0.001
-            Lambda = 0.001
-            ft = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            ets = Unit.ConvertToBaseUnit*(10000, '1000000*kg/s')
-            dens = Unit.ConvertToBaseUnit(10000, 'kg/m/m/m')
+            fck = Unit.ConvertToBaseUnit(45, 'mpa')
+            E = Unit.ConvertToBaseUnit(3.35, '1e4*N/mm/mm')
+            dens = Unit.ConvertToBaseUnit(2.41, '1e4kg/m/m/m')
+
         elif type == ConcreteType.C50:
-            fpc = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsc0 = 0.001
-            fpcu = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsu = 0.001
-            Lambda = 0.001
-            ft = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            ets = Unit.ConvertToBaseUnit*(10000, '1000000*kg/s')
-            dens = Unit.ConvertToBaseUnit(10000, 'kg/m/m/m')
+            fck = Unit.ConvertToBaseUnit(50, 'mpa')
+            E = Unit.ConvertToBaseUnit(3.45, '1e4*N/mm/mm')
+            dens = Unit.ConvertToBaseUnit(2.42, '1e3*kg/m/m/m')
+
         elif type == ConcreteType.C55:
-            fpc = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsc0 = 0.001
-            fpcu = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            epsu = 0.001
-            Lambda = 0.001
-            ft = Unit.ConvertToBaseUnit(10000, '1000000*kg/s')
-            ets = Unit.ConvertToBaseUnit*(10000, '1000000*kg/s')
-            dens = Unit.ConvertToBaseUnit(10000, 'kg/m/m/m')
+            fck = Unit.ConvertToBaseUnit(55, 'mpa')
+            E = Unit.ConvertToBaseUnit(3.55, '1e4*N/mm/mm')
+            dens = Unit.ConvertToBaseUnit(2.43, '1e3*kg/m/m/m')
+
         else:
-            logger.warning("RebarType:{} are not finished".format(type.value))
+            StandardLogger.warning("RebarType:{} are not finished".format(type.value))
             raise Exception("RebarType:{} are not finished".format(type.value))
         
+        fpc = 0.79 * fck
+        epsc0 = 2 * fpc / E
+        fpcu = 0.2 * fpc
+        epsu = 0.004
+        Lambda = 0.1
+        ft = -0.15*fpc
+        ets = ft/0.002
+
         return {
                 "fpc": fpc,
                 "epsc0": epsc0,

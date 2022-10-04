@@ -1,8 +1,11 @@
 from dataclasses import dataclass
+from email import message
+from multiprocessing import pool
+from tracemalloc import StatisticDiff
 from typing import overload
+import numpy as np
 
 from . import UtilTools
-# from src.UtilTools import Util
 from . import Comp
 from . import Load
 from . import OpsObject
@@ -73,7 +76,7 @@ class AnalysParams():
 
     def setSystem(self, systemEnum:SystemEnum, icntl14=20.0, icntl7=7):
         if systemEnum != SystemEnum.Mumps:
-            logger.info("INFO: systemEnum is not Mumps, icntl14 and inctly is ignored")
+            StandardLogger.info("INFO: systemEnum is not Mumps, icntl14 and inctly is ignored")
             self.system = [systemEnum.value]
         else:
             self.system = [systemEnum.value]
@@ -86,13 +89,13 @@ class AnalysParams():
 
     def setTest(self, testEnum:TestEnum, *args):
         if testEnum == TestEnum.NormDispIncr:
-            logger.info("INFO: testEnum is NormDispIncr, args should be [tol, Iter, pFlag, nType]")
+            StandardLogger.info("INFO: testEnum is NormDispIncr, args should be [tol, Iter, pFlag, nType]")
             self.test = [testEnum.value]
             self.test += args
             if len(args) == 2:
                 self.test += [0, 2]
         elif testEnum == TestEnum.NormUnbalance:
-            logger.info("INFO: testEnum is NormUnbalance, args should be [tol, iter, pFlag=0, nType=2, maxIncr=maxIncr]")
+            StandardLogger.info("INFO: testEnum is NormUnbalance, args should be [tol, iter, pFlag=0, nType=2, maxIncr=maxIncr]")
             self.test = [testEnum.value]
             self.test += args
         else:
@@ -108,25 +111,25 @@ class AnalysParams():
 
     def setAlogrithm(self, alogrithmEnum:AlgorithmEnum, *args):
         if alogrithmEnum == AlgorithmEnum.Linear:
-            logger.info("INFO: Alogrithm is Linear, args should be [secant=False, initial=False, factorOnce=False]")
+            StandardLogger.info("INFO: Alogrithm is Linear, args should be [secant=False, initial=False, factorOnce=False]")
             self.algorithm = [alogrithmEnum.value]
             self.algorithm += args
             if len(args) == 0:
                 self.algorithm += [False, False, False]
         elif alogrithmEnum == AlgorithmEnum.Newton:
-            logger.info("INFO: Alogrithm is Newton, args should be [secant=False, initial=False, initialThenCurrent=False]")
+            StandardLogger.info("INFO: Alogrithm is Newton, args should be [secant=False, initial=False, initialThenCurrent=False]")
             self.algorithm = [alogrithmEnum.value]
             self.algorithm += args
             if len(args) == 0:
                 self.algorithm += [False, False, False]
         elif alogrithmEnum == AlgorithmEnum.ModifiedNewton:
-            logger.info("INFO: Alogrithm is ModifiedNewton, args should be [secant=False, initial=False]")
+            StandardLogger.info("INFO: Alogrithm is ModifiedNewton, args should be [secant=False, initial=False]")
             self.algorithm = [alogrithmEnum.value]
             self.algorithm += args
             if len(args) == 0:
                 self.algorithm += [False, False]
         elif alogrithmEnum == AlgorithmEnum.NewtonLineSearch:
-            logger.info("INFO: Alogrithm is NewtonLineSearch, args should be [Bisection=False, Secant=False, RegulaFalsi=False, InitialInterpolated=False, tol=0.8, maxIter=10, minEta=0.1, maxEta=10.0]")
+            StandardLogger.info("INFO: Alogrithm is NewtonLineSearch, args should be [Bisection=False, Secant=False, RegulaFalsi=False, InitialInterpolated=False, tol=0.8, maxIter=10, minEta=0.1, maxEta=10.0]")
             self.algorithm = [alogrithmEnum.value]
             self.algorithm += args
             if len(args) == 0:
@@ -143,18 +146,18 @@ class AnalysParams():
 
     def setIntegrator(self, interEnum, *args):
         if interEnum == InteratorEnum.Static.DisplacementControl:
-            logger.info('Integrator is DisplacementControl, args should be [nodeTag, dof, incr, numIter=1, dUmin=incr, dUmax=incr]')
+            StandardLogger.info('Integrator is DisplacementControl, args should be [nodeTag, dof, incr, numIter=1, dUmin=incr, dUmax=incr]')
             # print("INFO: Integrator is DisplacementControl, args should be [nodeTag, dof, incr, numIter=1, dUmin=incr, dUmax=incr]")
             
             self.integrator = [interEnum.value]
             self.integrator += args
         elif interEnum == InteratorEnum.Static.LoadControl:
-            logger.info('INFO: Integrator is LoadControl, args should be [incr, numIter=1, minIncr=incr, maxIncr=incr]')
+            StandardLogger.info('INFO: Integrator is LoadControl, args should be [incr, numIter=1, minIncr=incr, maxIncr=incr]')
             # print("INFO: Integrator is LoadControl, args should be [incr, numIter=1, minIncr=incr, maxIncr=incr]")
             self.integrator = [interEnum.value]
             self.integrator += args
         elif interEnum == InteratorEnum.Transient.Newmark:
-            logger.info("INFO: Integrator is Newmark, args should be [gamma, beta, '-form', form]")
+            StandardLogger.info("INFO: Integrator is Newmark, args should be [gamma, beta, '-form', form]")
             # print("INFO: Integrator is Newmark, args should be [gamma, beta, '-form', form]")
             self.integrator = [interEnum.value]
             self.integrator += [1/2, 1/4]
@@ -171,9 +174,9 @@ class DEF_ANA_PARAM:
         dt = 0.01
         
         anaParm = AnalysParams()
-        anaParm.setAlogrithm(AlgorithmEnum.Linear)
-        anaParm.setAnalyz(1/dt, dt)
-        anaParm.setIntegrator(InteratorEnum.Static.LoadControl, 0.1, 1, 0.1, 0.1)
+        anaParm.setAlogrithm(AlgorithmEnum.Newton)
+        anaParm.setAnalyz(1)
+        anaParm.setIntegrator(InteratorEnum.Static.LoadControl, dt)
         anaParm.setNumberer(NumbererEnum.RCM)
         anaParm.setSystem(SystemEnum.BandSPD)
         anaParm.setTest(TestEnum.NormDispIncr, 10-4, 10)
@@ -187,56 +190,38 @@ class DEF_ANA_PARAM:
         return cls.DefaultGrivateAnalysParam
 
 class NodeRst:
-    def __init__(self, NodeuniqNum) -> None:
-        self._uniqNum = NodeuniqNum
+    def __init__(self, BridgeNode, nodeRes) -> None:
+        self._rst = nodeRes
+        self._node = BridgeNode
 
-        self._ux = None
-        self._uy = None
-        self._uz = None
-
-        self._ratx = None
-        self._raty = None
-        self._ratz = None
     
     @property
     def ux(self):
-        if self._ux == None:
-            self._ux = ops.nodeDisp(self._uniqNum, 1)
-        return self._ux
+        return self._rst[0]
 
     @property
     def uy(self):
-        if self._uy == None:
-            self._uy = ops.nodeDisp(self._uniqNum, 2)
-        
-        return  self._uy
+        return  self._rst[1]
+
     @property
     def uz(self):
-        if self._uz == None:
-            self._uz = ops.nodeDisp(self._uniqNum, 3)
+        return self._rst[2]
 
-        return self._uz
     @property
     def ratx(self):
-        if self._ratx == None:
-            self._ratx = ops.nodeDisp(self._uniqNum, 4)
+        return self._rst[3]
 
-        return self._ratx
     @property
     def raty(self):
-        if self._raty == None:
-            self._raty = ops.nodeDisp(self._uniqNum, 5)
+        return self._rst[1]
 
-        return self._raty
     @property
     def ratz(self):
-        if self._ratz == None:
-            self._ratz = ops.nodeDisp(self._uniqNum, 6)
+        return self._rst[1]
 
-        return self._ratz
 class EleRst:
     def __init__(self, ele:OpsObject.OpsElement) -> None:
-        ele.se
+        ...
 class AnalsisModel(Comp.Component):
     _StaticLoad:list[Load.StaticLoads] = []
     _DynamicLoads:list[Load.DynamicLoads] = []
@@ -267,6 +252,7 @@ class AnalsisModel(Comp.Component):
     @classmethod
     def AnalysInit(cls):
         Comp.CompMgr.clearComp()
+        OpsCommandLogger.info('ops.wipe()')
         ops.wipe()
 
         cls._StaticLoad = []
@@ -291,107 +277,210 @@ class AnalsisModel(Comp.Component):
             raise Exception("Wrong Params:{}".format(fixval))
 
         for p in points:
-            flag, node = cls.FindeNode(p)
+            flag, node = cls.Inquire.FindeNode(p)
             if flag:
                 Part.BridgeFixedBoundary(node, fixval)
             else:
-                logger.warning("point:{} can find in this Analsy model, ignored".format(p))
-    
-    @classmethod
-    def FindeNode(cls, point:tuple):
-        for seg in cls._SegmentList:
-            flag, n = seg.FindPoint(point)
-            if flag:
-                return True, n
-        return False, None
+                StandardLogger.warning("point:{} can find in this Analsy model, ignored".format(p))
 
-    # def FindeClosestNode(cls, point:tuple):
-    #     for seg in cls._SegmentList:
-    #         dis_ = []
-    #         dis_.append(UtilTools.PointsTools.PointsDist(point, seg.NodeList[0]))
-    #         dis_.append(UtilTools.PointsTools.PointsDist(point, seg.NodeList[1]))
-
-    #         for i, p in enumerate(seg.NodeList[:-2]):
-    #             d1 = dis_[i]
-    #             d2 = dis_[+1]
-    #             d3 = UtilTools.PointsTools.PointsDist(point, p)
-    #             dis_.append(d3)
-    class Rst:
-        def __init__(self, analysType:str):
-            self._type = analysType
-        
-        def __getitem__(self, arg):
-            if type(arg) is tuple:
-                flag, node = AnalsisModel.FindeNode(arg)
+    class Inquire:
+        @classmethod
+        def FindeNode(cls, point:tuple):
+            for seg in AnalsisModel._SegmentList:
+                flag, n = seg.FindPoint(point)
                 if flag:
-                    return NodeRst(node.OpsNode.uniqNum)
-                else:
-                    logger.warning("can't find node:{}".format(arg))
-                    return None
+                    return True, n
+            return False, None
+        
+        @classmethod
+        def FindeNodeByTag(cls, nodeTag):
+            flag, node = Comp.CompMgr.getCompByUniqNum(nodeTag, Part.BridgeNode)
+            return flag, node
+
+        @classmethod
+        def FindSectByTag(cls, sectTag):
+            flag, sect = Comp.CompMgr.getCompByUniqNum(sectTag, Part.CrossSection)
+            return flag, sect
+
+        @classmethod
+        def FindElement(cls, p1:tuple, p2:tuple):
+            for seg in AnalsisModel._SegmentList:
+                flag, e = seg.FindElement(p1, p2)
+                if flag:
+                    return True, e
+
+            return False, None
+        
+        @classmethod
+        def FindElementByTag(cls, eleTag):
+            
+            flag, ele = Comp.CompMgr.getCompByUniqNum(eleTag, OpsObject.OpsElement)
+            return flag, ele
+            
+
+        @classmethod
+        def FindElementHasPoint(cls, point:tuple[float]):
+            res = []
+            for seg in AnalsisModel._SegmentList:
+                for ele in seg.ELeList:
+                    if point in (ele.NodeI.xyz, ele.NodeJ.xyz):
+                        res.append(ele)
+
+            if len(res) == 0:
+                return False, None
             else:
-                logger.warning("unspported arg:{}".format(arg))
+                return True, res
+        
+        @classmethod
+        def FindSeg(cls, p1, p2):
+
+            for seg in AnalsisModel._SegmentList:
+                sp = seg.NodeList[0].point
+                ep = seg.NodeList[-1].point
+                if UtilTools.PointsTools.isInLine(p1, sp, ep) and UtilTools.PointsTools.isInLine(p2, sp, ep):
+                    return True, seg
+            
+            return False, None
+        
+        @classmethod
+        def FindSegsByOnePoint(cls, p1):
+            segs = []
+            for seg in AnalsisModel._SegmentList:
+                sp = seg.NodeList[0].point
+                ep = seg.NodeList[-1].point
+                if UtilTools.PointsTools.isInLine(p1, sp, ep):
+                    segs.append(seg)
+
+            if segs:
+                return True, segs
+            else:
+                return False, None
+
+        @classmethod
+        @property
+        def AllNodes(cls) -> list[Part.BridgeNode]:
+            nodes = []
+            for seg in AnalsisModel._SegmentList:
+                nodes += seg.NodeList
+            return nodes
+
+        @classmethod
+        @property
+        def AllElements(cls) -> list[OpsObject.OpsElement]:
+            eles = []
+            for seg in AnalsisModel._SegmentList:
+                eles += seg.ELeList
+
+            return eles
+        
+        @classmethod
+        @property
+        def AllSegments(cls) -> list[Part.Segment]:
+            return AnalsisModel._SegmentList
+        
+        @classmethod
+        def listNodeInfo(clso, bridgeNode:Part.BridgeNode) -> None:
+            info = "BridgeNode tag:{}\nlocation:{}\nmass:{}\nOpsElement tag:{}\n"
+            info = info.format(bridgeNode.uniqNum, bridgeNode.point, bridgeNode.Mass, bridgeNode.OpsNode.uniqNum)
+
+        @classmethod
+        def listAllNodeInfo(cls) -> None:
+            nodes = cls.AllNodes
+            for node in nodes:
+                cls.listNodeInfo(node)
+
+        @classmethod
+        def listAllElementsInfo(cls):
+            eles = cls.AllElements
+            for ele in eles:
+                cls.listElementInfo(ele)
+                
+        @classmethod
+        def listElementInfo(cls, ele:OpsObject.OpsElement):
+            info = 'Element tag:{}\nNodeI - tag:{} - location:{}\nNodeJ - tag:{} - location:{}\nSect tag:{}\n'
+
+            info = info.format(ele.uniqNum, ele.NodeI.uniqNum, ele.NodeI.xyz, ele.NodeI.uniqNum, ele.NodeI.xyz, ele.Sect.uniqNum)
+            
+            print(info)
+
+        @classmethod
+        def listSegmentInfo(cls, seg:Part.Segment):
+            info ='Segment tag:{}\nSegment nodes tag:{}\nSegment elements tag:{}\nSegment Element Length List:{}\nSegment Cross-Section tags:{}\nSegment Mass list:{}\n'
+            nodes = []
+            eles = []
+            sects = []
+
+            for node in seg.NodeList:
+                nodes.append(node._uniqNum) 
+            for ele in seg.ELeList:
+                eles.append(ele._uniqNum)
+            for sect in seg.SectList:
+                sects.append(sect._uniqNum)
+
+            info = info.format(seg._uniqNum, nodes, eles, seg.EleLength, sects, seg.MassList)
+        
+        @classmethod
+        def listAllSegments(cls):
+            segs = cls.AllSegments
+            for seg in segs:
+                cls.listSegmentInfo(seg)
+
+        # def FindeClosestNode(cls, point:tuple):
+        #     for seg in cls._SegmentList:
+        #         dis_ = []
+        #         dis_.append(UtilTools.PointsTools.PointsDist(point, seg.NodeList[0]))
+        #         dis_.append(UtilTools.PointsTools.PointsDist(point, seg.NodeList[1]))
+
+        #         for i, p in enumerate(seg.NodeList[:-2]):
+        #             d1 = dis_[i]
+        #             d2 = dis_[+1]
+        #             d3 = UtilTools.PointsTools.PointsDist(point, p)
+        #             dis_.append(d3)
+    class Rst:
+        def __init__(self, times:list[float], pointslist:list[int], res:np.ndarray, analysType:str):
+            self._type = analysType
+            self._nodes = pointslist
+            #* res.shape = (len(nodelist), len([ux, uy, uz, ....], len(times)))
+            self._res:np.ndarray = res
+            self._times = np.array(times)
+
+        def getFrame(self, time:float):
+            index = np.argmin(np.abs(self._times - time))
+            if self._times[index] != time:
+                StandardLogger.warning("cant find time {}, return the clost time {}".format(time, self._times[index]))
+            
+            return self._res[:, :, index]
+
+        def getNodeValueTimes(self, nodeIndex):
+            if nodeIndex < self._res.shape[0]:
+                return self._times, self._res[nodeIndex, :, :]
+            else:
+                StandardLogger.warning("cant find nodeIndex {}".format(nodeIndex))
+        
+        def getValueTimes(self, nodeIndex, valueIndex):
+            if nodeIndex < self._res.shape[0] and valueIndex < self._res.shape[1]:
+                return self._times, self._res[nodeIndex, valueIndex, :]
+
+        def __getitem__(self, arg):
+            if self._nodes:
+                if type(arg) is tuple:
+                    # flag, node = AnalsisModel.Inquire.FindeNode(arg)
+                    # index = self._nodes.index(arg)
+                    try:
+                        index = self._nodes.index(arg)
+                    except ValueError:
+                        mess = "can't find node:{}".format(arg)
+                        StandardLogger.warning(mess)
+                        print(mess)
+                        return None
+                    
+                    return self.getNodeValueTimes(index)
+                else:
+                    StandardLogger.warning("unspported arg:{}".format(arg))
+            else:
+                StandardLogger.warning("Missing log point information, use getNodeValueTimes()")
 
             
-    @classmethod
-    def FindElement(cls, p1:tuple, p2:tuple):
-        for seg in cls._SegmentList:
-            flag, e = seg.FindElement(p1, p2)
-            if flag:
-                return True, e
-
-        return False, None
-
-    @classmethod
-    def FindElementHasPoint(cls, point:tuple[float]):
-        res = []
-        for seg in cls._SegmentList:
-            for ele in seg.ELeList:
-                if point in (ele.NodeI.xyz, ele.NodeJ.xyz):
-                    res.append(ele)
-
-        if len(res) == 0:
-            return False, None
-        else:
-            return True, res
-    
-    @classmethod
-    def FindSeg(cls, p1, p2):
-
-        for seg in cls._SegmentList:
-            sp = seg.NodeList[0].point
-            ep = seg.NodeList[-1].point
-            if UtilTools.PointsTools.isInLine(p1, sp, ep) and UtilTools.PointsTools.isInLine(p2, sp, ep):
-                return True, seg
-        
-        return False, None
-    
-    @classmethod
-    def FindSegsByOnePoint(cls, p1):
-        segs = []
-        for seg in cls._SegmentList:
-            sp = seg.NodeList[0].point
-            ep = seg.NodeList[-1].point
-            if UtilTools.PointsTools.isInLine(p1, sp, ep):
-                segs.append(seg)
-
-        if segs:
-            return True, segs
-        else:
-            return False, None
-
-    @classmethod
-    def AllNodes(cls) -> list[Part.BridgeNode]:
-        nodes = []
-        for seg in cls._SegmentList:
-            nodes += seg.NodeList
-        return nodes
-
-    @classmethod
-    def AllElements(cls) -> list[OpsObject.OpsElement]:
-        eles = []
-        for seg in cls._SegmentList:
-            eles += seg.ELeList
-        return eles
 
     @classmethod
     def AddPattern(cls, type:str):
@@ -421,14 +510,16 @@ class AnalsisModel(Comp.Component):
 
     @classmethod
     def buildFEM(cls):
-        eles = cls.AllElements()
+        eles = cls.Inquire.AllElements
         for ele in eles:
             ele.uniqNum
         cls._FEMBuilt = True
      
     @classmethod
-    def RunGravityAnalys(cls, analysParam:AnalysParams=DEF_ANA_PARAM.DefaultGrivateAnalysParam):
+    def RunGravityAnalys(cls, res_func, points:list[tuple[float]]=None, analysParam:AnalysParams=DEF_ANA_PARAM.DefaultGrivateAnalysParam):
+        OpsCommandLogger.info('ops.wipeAnalysis()')
         ops.wipeAnalysis()
+        OpsCommandLogger.info('ops.loadConst(\'{}\', {})'.format('-time', 0.0))
         ops.loadConst('-time', 0.0)
         if not cls._FEMBuilt:
             cls.buildFEM()
@@ -442,18 +533,84 @@ class AnalsisModel(Comp.Component):
         #     Analsis._StaticPattern.uniqNum
         #     Analsis._Gravity[0].ApplyLoad()
 
+            OpsCommandLogger.info('ops.constraints(*{})'.format(analysParam.constraints))
             ops.constraints(*analysParam.constraints)
+            
+            OpsCommandLogger.info('ops.integrator(*{})'.format(analysParam.integrator))
             ops.integrator(*analysParam.integrator)
+
+            OpsCommandLogger.info('ops.numberer(*{})'.format(analysParam.numberer))
             ops.numberer(*analysParam.numberer)
+
+            OpsCommandLogger.info('ops.system(*{})'.format(analysParam.system))
             ops.system(*analysParam.system)
+
+            OpsCommandLogger.info('ops.test(*{})'.format(analysParam.test))
             ops.test(*analysParam.test)
+
+            OpsCommandLogger.info('ops.algorithm(*{})'.format(analysParam.algorithm))
             ops.algorithm(*analysParam.algorithm)
+            # ops.algorithm('ModifiedNewton', '-initial')
+
+            OpsCommandLogger.info('ops.analysis(\'{}\')'.format('Static'))
             ops.analysis('Static')
-            ops.analyze(*analysParam.analyze)
+
+            # nodes:list[Part.BridgeNode] = []
+            # warningmess = "can not find point:{} in this analysis model"
+
+            # if points:
+            #     for p in points:
+
+            #         flag, node = cls.Inquire.FindeNode(p)
+            #         if flag:
+            #             nodes.append(node)
+            #         else:
+                        
+            #             StandardLogger.warning(warningmess.format(p))
+            #             print(warningmess.format(p))
+                
+            times = []
+            OpsCommandLogger.info('ops.getTime()'.format())
+            time = ops.getTime()
+            times.append(time)
+
+            res = []
+
+            while(time < 1):
+                
+                OpsCommandLogger.info('ops.analyze(*{})'.format(analysParam.analyze))
+                output = ops.analyze(*analysParam.analyze)
+                if output != 0:
+                    mess = "Opensees Analyze failed, return code: {}".format(output)
+                    print(mess)
+                    raise Exception(mess)
+
+                OpsCommandLogger.info('ops.getTime()'.format())
+                time = ops.getTime()
+                times.append(time)
+                
+
+                nodes_res = []
+                if points:
+                    for p in points:
+                        n_res = res_func(p)
+                    nodes_res.append(n_res)
+                    
+                else:
+                    nodes_res = res_func()
+                
+                nodes_res = np.array(nodes_res)
+
+                res.append(nodes_res)
+            
+            times = times[:-1]
+            
+            res = np.array(res)
+            res = np.transpose(res, [1, 2, 0])
 
             cls._AnalsyFinshed = True
 
-            return AnalsisModel.Rst('Grivate')
+            return AnalsisModel.Rst(times, points, res, 'Gravity')
 
         else:
             raise Exception("No gravity parameter is added")
@@ -471,6 +628,7 @@ class AnalsisModel(Comp.Component):
         if gravity and gravityAnaParams:
             AnalsisModel.RunGravityAnalys(gravityAnaParams)
 
+        OpsCommandLogger.info('ops.loadConst(\'{}\', {})'.format('-time', 0.0))
         ops.loadConst('-time', 0.0)
         loads = AnalsisModel._StaticLoad
 
@@ -489,14 +647,18 @@ class AnalsisModel(Comp.Component):
         ops.test(*analysParam.test)
         ops.algorithm(*analysParam.algorithm)
         ops.analysis('Static')
-        ops.analyze(*analysParam.analyze)
+        time = ops.getTime()
+        print(time)
+        while(time < 1):
+            
+            ops.analyze(*analysParam.analyze)
 
         cls._AnalsyFinshed = True
         
         return AnalsisModel.Rst('Static')
         
     @classmethod
-    def RunSeismicAnalysis(cls, analysParam:AnalysParams, gravity=False, gravityAnaParams:AnalysParams=None):
+    def RunSeismicAnalysis(cls, res_func, points:list[tuple[float]]=None, analysParam:AnalysParams=DEF_ANA_PARAM.DefaultGrivateAnalysParam):
 
         loads:list[Load.DynamicLoads] = []
         
@@ -509,6 +671,7 @@ class AnalsisModel(Comp.Component):
         if gravity and gravityAnaParams:
             AnalsisModel.RunGravityAnalys(gravityAnaParams)
 
+        OpsCommandLogger.info('ops.loadConst(\'{}\', {})'.format('-time', 0.0))
         ops.loadConst('-time', 0.0)
         load = AnalsisModel._DynamicLoads
 

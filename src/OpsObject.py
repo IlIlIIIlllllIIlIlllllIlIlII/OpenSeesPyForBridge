@@ -10,6 +10,7 @@ from src import Paras
 from . import Comp
 from . import GlobalData
 from . import UtilTools
+from .log import *
 
 # * 桥梁节点类 表示有限元节点
 class OpsNode(Comp.OpsObj):
@@ -17,12 +18,14 @@ class OpsNode(Comp.OpsObj):
     @Comp.CompMgr()
     def __init__(self, xyz: tuple, name=""):
         super(OpsNode, self).__init__(name)
-        self._type += "->OpsNode"
+        self._type += "->Ops Node"
 
         self._xyz = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
 
     def _create(self):
+        OpsCommandLogger.info('ops.node({}, *{})'.format(self._uniqNum, self._xyz))
         ops.node(self._uniqNum, *self._xyz)
+
     @property
     def xyz(self):
         return self._xyz
@@ -37,17 +40,16 @@ class OpsNode(Comp.OpsObj):
 class OpsMass(Comp.OpsObj):
     def __init__(self, node:OpsNode, mass:float, dof:list[int]=[0,0,-1,0,0,0], name=""):
         super(OpsMass, self).__init__(name)
-        self._type += '->OpsMass'
+        self._type += '->Ops Mass'
         self._Node = node
         self._mass = float(mass)
         if len(dof) == 6 and UtilTools.Util.isOnlyHas(dof, [0, 1, -1]):
             self._massDof = dof
     
     def _create(self):
-        ops.mass(self._Node.uniqNum, 
-                 self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2],
-                 self._mass*self._massDof[3], self._mass*self._massDof[4], self._mass*self._massDof[5])
-    
+        OpsCommandLogger.info('ops.mass({}, {}, {}, {}, {}, {}, {})'.format(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2], self._mass*self._massDof[3], self._mass*self._massDof[4], self._mass*self._massDof[5]))
+        ops.mass(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2], self._mass*self._massDof[3], self._mass*self._massDof[4], self._mass*self._massDof[5])
+
     @property
     def val(self):
         return [self._Node, self._mass, self._massDof]
@@ -67,7 +69,7 @@ class OpsFix(OpsBoundary):
     # @Comp.CompMgr()
     def __init__(self, node: OpsNode, fixlist:list[int] , name=""):
         super(OpsFix, self).__init__(node, name)
-        self._type = '->OpsFixBoundary'
+        self._type = '->Ops Fixed Boundary'
         if len(fixlist) != 6 and not UtilTools.Util.isOnlyHas(fixlist, [1, 0], flatten=True):
             raise Exception("Wrong Paras:{}".format(fixlist))
 
@@ -82,7 +84,9 @@ class OpsFix(OpsBoundary):
         return [self._node, self._fix]
 
     def _create(self):
+        OpsCommandLogger.info('ops.fix({}, *{})'.format(self._node.uniqNum, self._fix))
         ops.fix(self._node.uniqNum, *self._fix)
+
 class OpsGemoTrans(Comp.OpsObj):
     @abstractmethod
     def __init__(self, vecz:tuple[float], name=""):
@@ -109,6 +113,7 @@ class OpsLinearTrans(OpsGemoTrans):
         return [self._vecz]
 
     def _create(self):
+        OpsCommandLogger.info('ops.geomTransf("Linear", {}, *{})'.format(self._uniqNum, self._vecz))
         ops.geomTransf("Linear", self._uniqNum, *self._vecz)
 
 class OpsPDletaTrans(OpsGemoTrans):
@@ -122,6 +127,7 @@ class OpsPDletaTrans(OpsGemoTrans):
         return [self._vecz]
 
     def _create(self):
+        OpsCommandLogger.info('ops.geomTransf("PDelta", {}, *{})'.format(self._uniqNum, self._vecz))
         # geomTransf('PDelta', transfTag, *vecxz, '-jntOffset', *dI, *dJ)
         ops.geomTransf("PDelta", self._uniqNum, *self._vecz)
 
@@ -177,17 +183,8 @@ class OpsConcrete02(OpsMaterial):
                     self._lambda, self._ft, self._ets, self._E, self._G]
                     
     def _create(self):
-        ops.uniaxialMaterial(
-            "Concrete02",
-            self._uniqNum,
-            self._fpc,
-            self._epsc0,
-            self._fpcu,
-            self._epsu,
-            self._lambda,
-            self._ft,
-            self._ets,
-        )
+        OpsCommandLogger.info('ops.uniaxialMaterial("Concrete02", {}, {}, {}, {}, {}, {}, {}, {})'.format(self._uniqNum, self._fpc, self._epsc0, self._fpcu, self._epsu, self._lambda, self._ft, self._ets))
+        ops.uniaxialMaterial( "Concrete02", self._uniqNum, self._fpc, self._epsc0, self._fpcu, self._epsu, self._lambda, self._ft, self._ets)
 
 class OpsSteel02(OpsMaterial):
     """
@@ -219,16 +216,8 @@ class OpsSteel02(OpsMaterial):
         return [self._fy, self._e0, self._b, self._r0, self._cr1, self._cr2]
 
     def _create(self):
-        ops.uniaxialMaterial(
-            "Steel02",
-            self._uniqNum,
-            self._fy,
-            self._e0,
-            self._b,
-            self._r0,
-            self._cr1,
-            self._cr2,
-        )
+        OpsCommandLogger.info('ops.uniaxialMaterial("Steel02", {}, {}, {}, {}, {}, {}, {})'.format(self._uniqNum, self._fy, self._e0, self._b, self._r0, self._cr1, self._cr2))
+        ops.uniaxialMaterial( "Steel02", self._uniqNum, self._fy, self._e0, self._b, self._r0, self._cr1, self._cr2)
 
 class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod
@@ -250,20 +239,14 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         np2 = np2 - d
         np1 = list(np1)
         np2 = list(np2)
-        ops.layer(
-            "straight",
-            m.uniqNum,
-            n,
-            area.value,
-            float(np1[0]),
-            float(np1[1]),
-            np2[0],
-            np2[1],
-        )
+        OpsCommandLogger.info('ops.layer({}, {}, {}, {}, {}, {}, {})'.format(m.uniqNum, n, area.value, float(np1[0]), float(np1[1]), np2[0], np2[1]))
+        ops.layer( "straight", m.uniqNum, n, area.value, float(np1[0]), float(np1[1]), np2[0], np2[1])
 
     @staticmethod
     def RoundRebarFiberBuild(r:float, m:OpsMaterial, area:GlobalData.ReBarArea, n:int):
         ops.layer("circ", m.uniqNum, n, area.value, 0, 0, r)
+        message = 'ops.layer("circ", {}, {}, {}, 0, 0, {})'.format(m.uniqNum, n, area.value, r)
+        OpsCommandLogger.info(message)
 
     @staticmethod
     def HRectConcreteFiberBuild(w:float, l:float, t:float, m: OpsMaterial, fibersize:tuple[int, ...]):
@@ -279,10 +262,25 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         p22 = (w1 / 2, -l1 / 2)
         p33 = (-w1 / 2, -l1 / 2)
         p44 = (-w1 / 2, l1 / 2)
+        
+        message = 'ops.patch("rect", {}, {}, {}, {})'
+
         ops.patch("rect", m.uniqNum, *fibersize, *p1, *p22)
+        message = message.format(m.uniqNum, *fibersize, *p1, *p22)
+        OpsCommandLogger.info(message)
+
         ops.patch("rect", m.uniqNum, *fibersize, *p2, *p33)
+        message = message.format(m.uniqNum, *fibersize, *p2, *p33)
+        OpsCommandLogger.info(message)
+
         ops.patch("rect", m.uniqNum, *fibersize, *p3, *p44)
+        message = message.format(m.uniqNum, *fibersize, *p3, *p44)
+        OpsCommandLogger.info(message)
+
         ops.patch("rect", m.uniqNum, *fibersize, *p4, *p11)
+        message = message.format(m.uniqNum, *fibersize, *p4, *p11)
+        OpsCommandLogger.info(message)
+
     @staticmethod
     def RoundConcreteFiberBuild(Rin:float, Rout:float, m:OpsMaterial, fiberSize:tuple[int, ...]):
         # patch('circ', matTag, numSubdivCirc, numSubdivRad, *center, *rad, *ang)
@@ -294,6 +292,8 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         if nCirc < 4:
             nCirc = 4
         ops.patch("circ", m.uniqNum, nCirc, nRad, 0, 0, Rin, Rout, 0, 360)
+        message = 'ops.patch("circ", {}, {}, {}, 0, 0, {}, {}, 0, 360)'.format(m.uniqNum, nCirc, nRad, Rin, Rout)
+        OpsCommandLogger.info(message)
 
 
 class OpsBoxSection(OpsSection):
@@ -314,20 +314,11 @@ class OpsBoxSection(OpsSection):
     def _create(self):
         # section('Elastic', secTag, E_mod, A, Iz, Iy, G_mod, Jxx, alphaY=None, alphaZ=None)
         if self._built is not True:
-            ops.section(
-                "Elastic",
-                self._uniqNum,
-                self._material._E,
-                self._attr["area"],
-                self._attr['inertia_x'],
-                self._attr['interia_y'],
-                self._material._G,
-                self._attr['interia_j'],
-                # alphaY=None,
-                # alphaZ=None,
-            )
+            OpsCommandLogger.info('ops.section( "Elastic", {}, {}, {}, {}, {}, {}, {})'.format(self._uniqNum, self._material._E, self._attr["area"], self._attr['inertia_x'], self._attr['interia_y'], self._material._G, self._attr['interia_j']))
+            ops.section( "Elastic", self._uniqNum, self._material._E, self._attr["area"], self._attr['inertia_x'], self._attr['interia_y'], self._material._G, self._attr['interia_j'])
 
 class OpsHRoundFiberSection(OpsSection):
+
     """
     """
     @Comp.CompMgr()
@@ -370,6 +361,7 @@ class OpsHRoundFiberSection(OpsSection):
         Rin = self._Rin + self._C
         Rout = self._Rout - self._C
 
+        OpsCommandLogger.info('ops.section("Fiber", {}, \'{}\', {})'.format(self._uniqNum, "-GJ", G * J))
         ops.section("Fiber", self._uniqNum, "-GJ", G * J)
 
         # * 普通钢筋纤维部分
@@ -426,6 +418,7 @@ class OpsSRoundFiberSection(OpsSection):
         G = self._CoreCon._G
         R = self._R - self._C
 
+        OpsCommandLogger.info('ops.section("Fiber", {}, \'{}\', {})'.format(self._uniqNum, "-GJ", G * J))
         ops.section("Fiber", self._uniqNum, "-GJ", G * J)
 
         # * 普通钢筋纤维部分
@@ -495,6 +488,8 @@ class OpsHRectFiberSection(OpsSection):
         t = self._t - 2 * c
         w = self._w - 2 * c
         l = self._l - 2 * c
+
+        OpsCommandLogger.info('ops.section("Fiber", {}, \'{}\', {})'.format(self._uniqNum, "-GJ", G * J))
         ops.section("Fiber", self._uniqNum, "-GJ", G * J)
 
         # * 普通钢筋纤维部分
@@ -557,7 +552,7 @@ class OpsZLElement(OpsElement):
     def __init__(self, node1:OpsNode, node2:OpsNode, mats:list[OpsMaterial], dirs:list[int], name=""):
         super().__init__(node1, node2, None, None, name)
 
-        self._type += '->OpsZeroLengthElement'
+        self._type += '->Zero Length Element'
 
         if len(mats) != len(dirs):
             raise Exception("wrong paras:{} and {}".format(mats, dirs))
@@ -572,8 +567,8 @@ class OpsZLElement(OpsElement):
         return [self._Node1, self._Node2, self._m, self._dirs]
 
     def _create(self):
-        ops.element('zeroLength', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, 
-                    '-mat', *self._m, '-dir', *self._dirs)
+        OpsCommandLogger.info('ops.element(\'{}\', {}, {}, {}, \'{}\', *{}, \'{}\', *{})'.format('zeroLength', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, '-mat', *self._m, '-dir', *self._dirs))
+        ops.element('zeroLength', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, '-mat', *self._m, '-dir', *self._dirs)
 
     @property
     def NodeI(self):
@@ -594,7 +589,7 @@ class OpsEBCElement(OpsElement):
     ):
         super(OpsEBCElement, self).__init__(node1, node2, sec, OpsLinearTrans(localZ), name)
 
-        self._type += "->ElasticBeamColumnElement"
+        self._type += "->Elastic Beam Column Element"
 
     @property
     def val(self):
@@ -614,25 +609,18 @@ class OpsEBCElement(OpsElement):
         return self._Sect
 
     def _create(self):
-        ops.element(
-            "elasticBeamColumn",
-            self._uniqNum,
-            self._Node1.uniqNum,
-            self._Node2.uniqNum,
-            self._Sect.uniqNum,
-            self._Transf.uniqNum
-        )
+        OpsCommandLogger.info('ops.element({}, {}, {}, {}, {}, {})'.format("elasticBeamColumn", self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._Sect.uniqNum, self._Transf.uniqNum))
+        ops.element("elasticBeamColumn", self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._Sect.uniqNum, self._Transf.uniqNum)
 
 class OpsNBCElement(OpsElement):
     __slots__ = []
     @Comp.CompMgr()
-    def __init__(self, node1:tuple[int, ...], node2:tuple[int, ...], sect:OpsBoxSection, localZ:tuple[int],
-                IntgrNum:int=5, maxIter=10, tol:float=1e-12, mass:float=0.0, IntgrType:str="Lobatto", name=""):
+    def __init__(self, node1:OpsNode, node2:OpsNode, sect:OpsBoxSection, localZ:tuple[int],IntgrNum:int=5, maxIter=10, tol:float=1e-12, mass:float=0.0, IntgrType:str="Lobatto", name=""):
         super(OpsNBCElement, self).__init__(node1, node2, sect, OpsLinearTrans(localZ), name)
         self._type += "->Nonlinear Beam Column Element"
 
         self._intgrN = IntgrNum
-        self._maxIer = maxIter
+        self._maxIter = maxIter
         self._tol = tol
         self._mass = mass
         self._intgrType = IntgrType
@@ -658,9 +646,8 @@ class OpsNBCElement(OpsElement):
         # element('nonlinearBeamColumn', eleTag, *eleNodes, numIntgrPts, 
         # secTag, transfTag, '-iter', maxIter=10, tol=1e-12, '-mass', mass=0.0, 
         # '-integration', intType)
-        ops.element('nonlinearBeamColumn', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, 
-                    self._intgrN, self._Sect.uniqNum, self._Transf.uniqNum, '-iter', self._maxIer, self._tol,
-                    '-mass', self._mass, '-itegration', self._intgrType)
+        OpsCommandLogger.info('ops.element("nonlinearBeamColumn", {}, {}, {}, {}, {}, {}, "-iter", {}, {}, "-mass", {}, "-itegration", \'{}\')'.format(self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._intgrN, self._Sect.uniqNum, self._Transf.uniqNum, self._maxIter, self._tol,  self._mass,self._intgrType))
+        ops.element('nonlinearBeamColumn', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._intgrN, self._Sect.uniqNum, self._Transf.uniqNum, '-iter', self._maxIter, self._tol, '-mass', self._mass, '-itegration', self._intgrType)
 
 class OpsTimeSeries(Comp.OpsObj):
     @abstractmethod
@@ -679,6 +666,7 @@ class OpsConstTimeSeries(OpsTimeSeries):
         self._type += '->ConstantTimeSeries'
     
     def _create(self):
+        OpsCommandLogger.info('ops.timeSeries({}, {})'.format('Constant', self._uniqNum))
         # timeSeries('Constant', tag, '-factor', factor=1.0)
         ops.timeSeries('Constant', self._uniqNum)
 
@@ -690,6 +678,7 @@ class OpsLinearTimeSerise(OpsTimeSeries):
     
     def _create(self):
     # timeSeries('Linear', tag, '-factor', factor=1.0, '-tStart', tStart=0.0)
+        OpsCommandLogger.info('ops.timeSeries(\'{}\', {})'.format('Linear', self._uniqNum))
         ops.timeSeries('Linear', self._uniqNum)
 
 class OpsPathTimeSerise(OpsTimeSeries):
@@ -701,6 +690,7 @@ class OpsPathTimeSerise(OpsTimeSeries):
         self._values = values
     
     def _create(self):
+        OpsCommandLogger.info('ops.timeSeries({}, {}, {}, *{}, {}, *{})'.format('Path', self._uniqNum, '-values', *self._values, '-time', *self._times))
     # timeSeries('Path', tag, '-dt', dt=0.0, '-values', *values, '-time', *time, '-filePath', filePath='', '-fileTime', fileTime='', '-factor', factor=1.0, '-startTime', startTime=0.0, '-useLast', '-prependZero')
         ops.timeSeries('Path', self._uniqNum, '-values', *self._values, '-time', *self._times)
     
@@ -728,6 +718,7 @@ class OpsPlainLoadPattern(Comp.OpsObj):
         self._timeseries = timeseries
     
     def _create(self):
+        OpsCommandLogger.info('ops.pattern(\'{}\', {}, {})'.format('Plain', self._uniqNum, self._timeseries.uniqNum))
         ops.pattern('Plain', self._uniqNum, self._timeseries.uniqNum)
     
     def val(self):
@@ -741,6 +732,7 @@ class OpsMSELoadPattern(Comp.OpsObj):
         self._type += '->Multi-Support Excitation Pattern'
     
     def _create(self):
+        OpsCommandLogger.info('ops.pattern(\'{}\', {})'.format('MultipleSupport', self._uniqNum))
         ops.pattern('MultipleSupport', self._uniqNum)
 
 
@@ -766,6 +758,7 @@ class OpsNodeLoad(OpsPlainLoads):
     def _create(self):
         # load(nodeTag, *loadValues)
         
+        OpsCommandLogger.info('ops.load({}, *{})'.format(self._Node.uniqNum, *self._Load))
         ops.load(self._Node.uniqNum, *self._Load)
     
     @property
@@ -788,6 +781,7 @@ class OpsEleLoad(OpsPlainLoads):
         for ele in self._Elements:
             uniqNum_.append(ele.uniqNum)
         # ops.eleLoad('-ele', self._Element.uniqNum, '-type', '-beamUniform', , <Wz>, Wx=0.0)
+        OpsCommandLogger.info('ops.eleLoad(\'{}\', *{}, \'{}\', \'{}\', {}, {}, {})'.format('-ele', uniqNum_, '-type', '-beamUniform', self._Load[1], self._Load[2], self._Load[0]))
         ops.eleLoad('-ele', *uniqNum_, '-type', '-beamUniform', self._Load[1], self._Load[2], self._Load[0])
     
     @property
@@ -806,6 +800,7 @@ class OpsSP(OpsPlainLoads):
     
     def _create(self):
         # sp(nodeTag, dof, *dofValues)
+        OpsCommandLogger.info('ops.sp({}. {}, {})'.format(self._node.uniqNum, self._dof, self._d))
         ops.sp(self._node.uniqNum, self._dof, self._d)
 
 class OpsPlainGroundMotion(Comp.OpsObj):
@@ -838,6 +833,7 @@ class OpsPlainGroundMotion(Comp.OpsObj):
 
     def _create(self):
         # groundMotion(gmTag, 'Plain', '-disp', dispSeriesTag, '-vel', velSeriesTag, '-accel', accelSeriesTag, '-int', tsInt='Trapezoidal', '-fact', factor=1.0)
+        OpsCommandLogger.info('ops.groundMotion({}, {}, *{}, {}, {})'.format(self._uniqNum, 'Plain', *self._args(), '-fact', self._factor))
         ops.groundMotion(self._uniqNum, 'Plain', *self._args(), '-fact', self._factor)
     
     @property
@@ -852,4 +848,5 @@ class OpsImposedGroundMotion(Comp.OpsObj):
         self._node = Node
         self._dof = dof
         self._groundMotion = groundMotion
+        OpsCommandLogger.info('ops.imposedMotion({}, {}, {})'.format(self._node.uniqNum, self._dof, self._groundMotion.uniqNum))
         ops.imposedMotion(self._node.uniqNum, self._dof, self._groundMotion.uniqNum)
