@@ -1,8 +1,14 @@
 from enum import Enum
+from pickle import GLOBAL
+from re import X
 from typing import overload
+from xml.dom.minidom import Element
 import xsect
 from abc import ABCMeta, abstractmethod
 import numpy as np
+import time
+
+# from src.Unit import ConvertToBaseUnit
 
 from . import Comp
 from . import GlobalData
@@ -60,7 +66,7 @@ class BridgeNode(Comp.Parts):
     
     def addMass(self, mass:float, massDis:list=[1, 1, 1, 0, 0, 0]):
         self._mass += mass
-        self._OpsMassList.append(OpsObject.OpsMass(self._OpsNode.uniqNum, mass, massDis))
+        self._OpsMassList.append(OpsObject.OpsMass(self._OpsNode, mass, massDis))
         
     @property
     def val(self):
@@ -69,51 +75,6 @@ class BridgeNode(Comp.Parts):
         """
         return [self._point, self._mass, self._OpsNode, self._OpsMassList]
 
-
-class Boundary(Comp.Parts, metaclass=ABCMeta):
-    @abstractmethod
-    def __init__(self, name=""):
-        super(Comp.Parts, self).__init__(name)
-        self._type += "Boundary"
-
-class BridgeFixedBoundary(Boundary):
-    __slots__ = ['_type', '_uniqNum', '_name', '_Node', '_OpsFix']
-    # @Comp.CompMgr()
-    def __init__(self, node:BridgeNode, fixVal:list, name=""):
-        super(BridgeFixedBoundary, self).__init__(name)
-        self._type += "->FixedBoundary"
-        self._node = node
-        self._fixVal = fixVal
-        self._OpsFix = OpsObject.OpsFix(self._node.OpsNode, self._fixVal)
-     
-    def _SectReBuild(self):
-        Comp.CompMgr.removeComp(self._OpsFix)
-        self._OpsFix = OpsObject.OpsFix(self._node.OpsNode, self._fixVal)
-
-    @property
-    def Node(self):
-        return self._node
-    @Node.setter
-    def Node(self, newVal):
-        if type(newVal) is type(self._node):
-            self._node = newVal
-            self._SectReBuild()
-        else:
-            raise Exception("Wrong Paras")
-    
-    @property
-    def fixVal(self):
-        return self._fixVal
-    @fixVal.setter
-    def fixVal(self, newVal):
-        if type(newVal) is type(self._fixVal):
-            self._fixVal = newVal
-        else:
-            raise Exception("Wrong Paras")
-    
-    @property
-    def val(self):
-        return [self._node, self._OpsFix]
 
 # * 截面类, 继承自构件类，派生出 主梁截面、桥墩截面
 class CrossSection(Comp.Parts, metaclass=ABCMeta):
@@ -170,15 +131,15 @@ class RCCrossSect(CrossSection):
     def __init__(self, paras, CoreCon:Paras.ConcreteParas, CoverCon:Paras.ConcreteParas, Rebar:Paras.SteelParas, R_flag, fiberSize:tuple[int]=(100, 100), name=""):
         super().__init__(paras, fiberSize, name)
 
-        self._type += "->Reforce Concrete Cross-Section"
+        self._type += "->Reinforcement Concrete Cross-Section"
         self._CoreCon:Paras.ConcreteParas = CoreCon
         self._CoverCon:Paras.ConcreteParas = CoverCon
         self._Rebar:Paras.SteelParas = Rebar
 
         if type(R_flag) is float:
-            self._RebarsDistr:Paras.SectRebarDistrParas = self._RebarsDistrBuild(R_flag)
+            self._RebarDistr:Paras.SectRebarDistrParas = self._RebarDistrBuild(R_flag)
         elif type(R_flag) is Paras.SectRebarDistrParas:
-            self._RebarsDistr:Paras.SectRebarDistrParas = R_flag
+            self._RebarDistr:Paras.SectRebarDistrParas = R_flag
         else:
             raise Exception("Wrong Params")
         
@@ -193,7 +154,7 @@ class RCCrossSect(CrossSection):
         ...
 
     @abstractmethod
-    def _RebarsDistrBuild(self, R):
+    def _RebarDistrBuild(self, R):
         ...
 
     @abstractmethod
@@ -216,7 +177,7 @@ class BoxSect(RCCrossSect):
         super().__init__(paras, Concrete, None, None, R_flag, fiberSize, name)
         self._type += "->BoxSect"
         
-        # self._attr, self._poins = self._SectAttrBuild()
+        # self._attr, self._points = self._SectAttrBuild()
         # self._OpsSect = self._OpsSectBuild()
 
     
@@ -275,14 +236,14 @@ class BoxSect(RCCrossSect):
         #     theta = np.arccos(cos_theta)
         #     if y2 < 0:
         #         theta = 2 * np.pi - theta
-        #     Trans_Zaxis = np.array(
+        #     Trans_ZAxis = np.array(
         #         [
         #             [np.cos(theta), np.sin(theta), 0],
         #             [-np.sin(theta), np.cos(theta), 0],
         #             [0, 0, 1],
         #         ]
         #     )
-        #     points = np.matmul(points, Trans_Zaxis)
+        #     points = np.matmul(points, Trans_ZAxis)
         # except:
         #     pass
         # # * 绕Y转动，计算x-z平面的角度变化
@@ -297,7 +258,7 @@ class BoxSect(RCCrossSect):
         # points += self._OrigPoint
         return arr, points
 
-    def _RebarsDistrBuild(self, R):
+    def _RebarDistrBuild(self, R):
         # TODO 可以写也可以不写
         return None
 
@@ -323,10 +284,10 @@ class BoxSect(RCCrossSect):
             raise Exception("Wrong Paras")
     
     # @property
-    # def N_aixs(self):
+    # def N_axis(self):
     #     return self._N_axis
-    # @N_aixs.setter
-    # def N_aixs(self, newVal):
+    # @N_axis.setter
+    # def N_axis(self, newVal):
     #     if type(newVal) is type(self._N_axis):
     #         self._N_axis = newVal
     #         self._SectReBuild()
@@ -402,7 +363,7 @@ class SRoundRCSect(RCCrossSect):
     @Comp.CompMgr()
     def __init__(self, paras: Paras.SRoundSectParas, CoreCon: Paras.ConcreteParas, CoverCon: Paras.ConcreteParas, Rebar: Paras.SteelParas, R_flag, fiberSize=(100, 100), name=""):
         super().__init__(paras, CoreCon, CoverCon, Rebar, R_flag, fiberSize,name)
-        self._type += "->Soild Round Reforcment Concrete Section"
+        self._type += "->Solid Round Reinforcement Concrete Section"
 
     def _SectAttrBuild(self):
         paras:Paras.SRoundSectParas = self._Paras
@@ -412,11 +373,11 @@ class SRoundRCSect(RCCrossSect):
         sectAttr = xsect.round_summary(d, step = step)
         points = xsect.round_points(d, step = step)
         points = UtilTools.PointsTools.TransXsectPointTo3D(points)
-        # points = UtilTools.PointsTools.RotatePoinsByVects(points, UtilTools.PointsTools.X_AXIS, self._N_axis)
+        # points = UtilTools.PointsTools.RotatePointsByVector(points, UtilTools.PointsTools.X_AXIS, self._N_axis)
 
         return sectAttr, points
 
-    def _RebarsDistrBuild(self, R):
+    def _RebarDistrBuild(self, R):
         
         # if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
         #     raise Exception("Error length of orig_point or N_axis, should be 3")
@@ -434,11 +395,11 @@ class SRoundRCSect(RCCrossSect):
         core = OpsObject.OpsConcrete02(*self._CoreCon.val)
         rebar = OpsObject.OpsSteel02(*self._Rebar.val)
 
-        return OpsObject.OpsSRoundFiberSection(paras.C, paras.R, self._SectAttr, self._RebarsDistr, core, cover, rebar, self._fiberSize)
+        return OpsObject.OpsSRoundFiberSection(paras.C, paras.R, self._SectAttr, self._RebarDistr, core, cover, rebar, self._fiberSize)
     
     @property
     def val(self):
-        return [self._Paras, self._SectAttr, self._Points, self._RebarsDistr, self._CoreCon, self._CoverCon, self._Rebar, self._fiberSize, self._OpsSect]
+        return [self._Paras, self._SectAttr, self._Points, self._RebarDistr, self._CoreCon, self._CoverCon, self._Rebar, self._fiberSize, self._OpsSect]
     @property
     def SectAttr(self):
         return self._SectAttr
@@ -470,11 +431,11 @@ class HRoundRCSect(RCCrossSect):
         attr = xsect.round_summary(d, t, step = step)
         points = xsect.round_points(d, t, step = step)
         points = UtilTools.PointsTools.TransXsectPointTo3D(points)
-        # points = UtilTools.PointsTools.RotatePoinsByVects(points, UtilTools.PointsTools.X_AXIS, self._N_axis)
+        # points = UtilTools.PointsTools.RotatePointsByVector(points, UtilTools.PointsTools.X_AXIS, self._N_axis)
 
         return attr, points
         
-    def _RebarsDistrBuild(self, R):
+    def _RebarDistrBuild(self, R):
         # if len(self._OrigPoint) != 3 or len(self._N_axis) != 3:
         #     raise Exception("Error length of orig_point or N_axis, should be 3")
 
@@ -490,7 +451,7 @@ class HRoundRCSect(RCCrossSect):
         core = OpsObject.OpsConcrete02(*self._CoreCon.val)
         cover = OpsObject.OpsConcrete02(*self._CoverCon.val)
         rebar = OpsObject.OpsSteel02(*self._Rebar.val)
-        return OpsObject.OpsHRoundFiberSection(paras.C, paras.Rout, paras.Rin, self._SectAttr, self._RebarsDistr, cover, core, rebar, self._fiberSize)
+        return OpsObject.OpsHRoundFiberSection(paras.C, paras.Rout, paras.Rin, self._SectAttr, self._RebarDistr, cover, core, rebar, self._fiberSize)
 
     def _SectReBuild(self):
         ...
@@ -511,7 +472,7 @@ class HRoundRCSect(RCCrossSect):
     
     @property
     def RebarDistr(self):
-        return self._RebarsDistr
+        return self._RebarDistr
 
     @property
     def OpsSect(self):
@@ -519,7 +480,7 @@ class HRoundRCSect(RCCrossSect):
     
     @property
     def val(self):
-        return [self._Paras, self._SectAttr, self._Points, self._RebarsDistr, self._CoreCon, self._CoverCon, self._Rebar, self._fiberSize, self._OpsSect]
+        return [self._Paras, self._SectAttr, self._Points, self._RebarDistr, self._CoreCon, self._CoverCon, self._Rebar, self._fiberSize, self._OpsSect]
     
 
 # * 空心矩形截面
@@ -538,7 +499,7 @@ class HRectRCSect(RCCrossSect):
         opsRebar = OpsObject.OpsSteel02(*self._Rebar.val)
         paras:Paras.HRectSectParas = self._Paras
 
-        return OpsObject.OpsHRectFiberSection(paras.C, paras.W, paras.L, paras.T, self._RebarsDistr, opsConCore, opsConCover, opsRebar, self._fiberSize)
+        return OpsObject.OpsHRectFiberSection(paras.C, paras.W, paras.L, paras.T, self._RebarDistr, opsConCore, opsConCover, opsRebar, self._fiberSize)
 
     def _SectAttrBuild(self):
         paras:Paras.HRectSectParas = self._Paras
@@ -591,7 +552,7 @@ class HRectRCSect(RCCrossSect):
         #             [0, -np.sin(theta), np.cos(theta)],
         #         ]
         #     )
-        #     points = np.matmul(points, Trans_Xaxis)
+        #     points = np.matmul(points, Trans_XAxis)
         # except:
         #     pass
         # # * 绕y轴偏转，计算x-z平面夹角
@@ -614,7 +575,7 @@ class HRectRCSect(RCCrossSect):
     
         return arr, points
 
-    def _RebarsDistrBuild(self, R):
+    def _RebarDistrBuild(self, R):
         
         # if len(self._OrigPoints) != 3 or len(self._N_axis) != 3:
         #     raise Exception("Error length of orig_point or N_axis, should be 3")
@@ -646,11 +607,11 @@ class HRectRCSect(RCCrossSect):
 
     @property
     def RebarsDistr(self):
-        return self._RebarsDistr
+        return self._RebarDistr
     @RebarsDistr.setter
     def RebarsDistr(self, newVal):
         if type(newVal) is float or type(newVal) is type(Paras.SectRebarDistrParas):
-            self._RebarsDistr = self._RebarsDistrBuild(newVal)
+            self._RebarDistr = self._RebarDistrBuild(newVal)
             self._SectReBuild()
         else:
             raise Exception("Wrong Paras")
@@ -718,7 +679,7 @@ class HRectRCSect(RCCrossSect):
         return [self._Paras, self._N_axis, self._Orig_p, self._Points, self._Arr, self._Rebars, 
                 self._OpsConCore, self._OpsConCover, self._OpsRebar, self._OpsPierSect]
         """
-        return [self._Paras, self._Points, self._Rebar, self._CoreCon, self._CoverCon, self._RebarsDistr, self._OpsSect]
+        return [self._Paras, self._Points, self._Rebar, self._CoreCon, self._CoverCon, self._RebarDistr, self._OpsSect]
 
     def plotSect(self, ax3d):
         ...
@@ -746,7 +707,35 @@ class HRectRCSect(RCCrossSect):
         # else:
         #     raise Exception("Exist Undefined Member")
 
-class Segment(Comp.Parts):
+class Body(Comp.Parts, metaclass=ABCMeta):
+    @abstractmethod
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += '->body'
+        self._Elements:list[OpsObject.OpsElement] = None
+        self._BridgeNodes:list[BridgeNode] = None
+        self._Masses:list[float] = None
+    
+    @abstractmethod
+    def _Build(self):
+        ...
+
+    @abstractmethod
+    def FindElement(self): ...
+
+    @abstractmethod
+    def FindRangeElement(self): ...
+
+    @abstractmethod
+    def FindBridgeNode(self): ...
+
+    @abstractmethod
+    def FindRangeBridgeNodes(self): ...
+
+    @abstractmethod
+    def BuildElement(self, elementType, *args, **kwargs):...
+
+class Segment(Body, metaclass=ABCMeta):
     class SupportedElementType(Enum):
         NonlinearBeamColumnElement = 'NBCE'
         ElasticBeamColumnElement = 'EBCE'
@@ -759,57 +748,138 @@ class Segment(Comp.Parts):
                        power:float,
                        localZ:tuple[float],
                        eleLengthList:list[float],
-                       eleDictParams:dict ={},
+                       eleExtraDictParams:dict ={},
                        name=""):
         super(Segment, self).__init__(name)
-        self._Ni:BridgeNode = BridgeNode(*point_i)
-        self._Nj:BridgeNode = BridgeNode(*point_j)
+        self._type += '->Segment'
+        self._BridgeNodeI:BridgeNode = BridgeNode(*point_i)
+        self._BridgeNodeJ:BridgeNode = BridgeNode(*point_j)
 
         self._Secti:Paras.SectParas = SectParas_i
         self._Sectj:Paras.SectParas = SectParas_j
 
         self._ElementType = elementType
-        self._ElementDictParams = eleDictParams
+        self._ElementExtraDictParams = eleExtraDictParams
 
         self._p:float = power
-        self._localXAxis:np.ndarray = UtilTools.PointsTools.vectSub(self._Ni.point, self._Nj.point)
+        self._localXAxis:np.ndarray = UtilTools.PointsTools.VectorSub(self._BridgeNodeI.point, self._BridgeNodeJ.point)
         self._localZAxis:np.ndarray = np.array(localZ)
 
-        self._totalLen = UtilTools.PointsTools.PointsDist(self._Ni.point, self._Nj.point)
+        self._totalLen = UtilTools.PointsTools.PointsDist(self._BridgeNodeI.point, self._BridgeNodeJ.point)
 
         self._eleLengthList:list[float] = eleLengthList
         
-        self._BridgeNodeList:list[BridgeNode] = None
-        self._SegElementList:list[OpsObject.OpsElement] = None
-        self._SegMassList:list[float] = None
+        self._BridgeNodes:list[BridgeNode] = None
+        self._Elements:list[OpsObject.OpsLineElement] = None
+        self._Masses:list[float] = None
         self._SegSectList:list[CrossSection] = None
+        
 
-    def FindPoint(self, point:tuple[float]):
-        for n in self._BridgeNodeList:
+    def FindBridgeNode(self, point:tuple[float], fuzzy:bool=False, tol=None):
+        tempN = None
+        tempDis = GlobalData.DEFVAL._MAXVAL_
+        for n in self._BridgeNodes:
             if n.point == point:
                 return True, n
-        return False, None
+            elif fuzzy:
+                dis = UtilTools.PointsTools.PointsDist(n.point, point)
+
+                if tol and not UtilTools.Util.TOLLE(dis, tol):
+                    dis = GlobalData.DEFVAL._MAXVAL_
+
+                tempDis, tempN = (dis, n) if dis < tempDis else (tempDis, tempN)
         
-    def FindElement(self, p1:tuple, p2:tuple):
-        for e in self._SegElementList:
+        if fuzzy and UtilTools.Util.TOLLG(tempDis, GlobalData.DEFVAL._MAXVAL_):
+            return True, tempN
+        else:
+            return False, None
+    
+    def FindRangeBridgeNodes(self, p1, p2, fuzzy=False, tol=None):
+        i = j = -1
+        if fuzzy:
+            flag, p1 = self.FindBridgeNode(p1, fuzzy=True, tol=tol)
+            if not flag:
+                return False, None
+
+            flag, p2 = self.FindBridgeNode(p2, fuzzy=True, tol=tol)
+            if not flag:
+                return False, None
+
+        for index, n in enumerate(self._BridgeNodes):
+            if n.point == p1:
+                i = index
+
+            if n.point == p2:
+                j = index
+        
+
+        if -1 in (i, j):
+            return False, None
+        else:
+            i,j = (i, j) if i<j else (j,i)
+            return True, self._BridgeNodes[i:j+1]
+        
+    def FindElement(self, p1:tuple, p2:tuple, fuzzy=False, tol=None):
+        if fuzzy:
+            flag, p1 = self.FindBridgeNode(p1, fuzzy=True, tol=tol)
+            if not flag:
+                return False, None
+
+            flag, p2 = self.FindBridgeNode(p2, fuzzy=True, tol=tol)
+            if not flag:
+                return False, None
+
+        for e in self._Elements:
             if (e.NodeI.xyz == p1 and e.NodeJ.xyz == p2) or (e.NodeI.xyz == p2 and e.NodeJ.xyz == p1):
                 return True, e
         return False, None
 
+    def FindRangeElement(self, p1, p2, fuzzy=False, tol=None):
+        if fuzzy:
+            flag, p1 = self.FindBridgeNode(p1, fuzzy=True, tol=tol)
+            if not flag:
+                return False, None
+
+            flag, p2 = self.FindBridgeNode(p2, fuzzy=True, tol=tol)
+            if not flag:
+                return False, None
+
+        disP1 = UtilTools.PointsTools.PointsDist(p1, self._Elements[0].NodeI.xyz)
+        disP2 = UtilTools.PointsTools.PointsDist(p2, self._Elements[0].NodeI.xyz)
+
+        stP, edP = (p1, p2) if disP2 > disP1 else (p2, p1)
+
+        idx_stP = idx_edP = -1
+
+        for index, e in enumerate(self._Elements):
+            if e.NodeI.xyz == stP:
+                idx_stP = index
+
+            if e.NodeJ.xyz == edP:
+                idx_edp = index
+
+        if idx_edP == -1 and idx_stP == -1:
+            return False, None
+        elif idx_edP == -1 or idx_stP == -1:
+            msg = "Start point {} or end point {} can not find, try FindElement".format(stP, edP)
+            StandardLogger.info(msg)
+            print(msg)
+            return True, 
     @abstractmethod
     def _Build():
         ...
+
     @overload
     def BuildElement(cls, elementType:SupportedElementType, node1:OpsObject.OpsNode, node2: OpsObject.OpsNode, sec: OpsObject.OpsSection, localZ: tuple, name="") -> OpsObject.OpsEBCElement:...
     @overload
     def BuildElement(cls, elementType:SupportedElementType, node1:OpsObject.OpsNode, node2:OpsObject.OpsNode, sect:OpsObject.OpsBoxSection, localZ:tuple[int],IntgrNum:int=5, maxIter=10, tol:float=1e-12, mass:float=0.0, IntgrType:str="Lobatto", name="") -> OpsObject.OpsNBCElement:...
 
     # @classmethod
-    def BuildElement(cls, elementType:SupportedElementType, *args, **kwargs):
+    def BuildElement(self, elementType:SupportedElementType, *args, **kwargs):
         
-        if elementType == cls.SupportedElementType.ElasticBeamColumnElement:
+        if elementType == self.SupportedElementType.ElasticBeamColumnElement:
             ele = OpsObject.OpsEBCElement(*args, **kwargs)
-        elif elementType == cls.SupportedElementType.NonlinearBeamColumnElement:
+        elif elementType == self.SupportedElementType.NonlinearBeamColumnElement:
             ele = OpsObject.OpsNBCElement(*args, **kwargs)
         else:
             message = 'Unsupport Element Type'
@@ -820,29 +890,29 @@ class Segment(Comp.Parts):
 
     @property
     def ELeList(self):
-        return self._SegElementList
+        return self._Elements
     @ELeList.setter
     def ELeList(self, newVal):
-        if type(newVal) is type(self._SegElementList):
-            self._SegElementList = newVal
+        if type(newVal) is type(self._Elements):
+            self._Elements = newVal
         else:
             raise Exception("Wrong Paras")
     @property
     def NodeList(self):
-        return self._BridgeNodeList
+        return self._BridgeNodes
     @NodeList.setter
     def NodeList(self, newVal):
-        if type(newVal) is type(self._BridgeNodeList):
-            self._BridgeNodeList = newVal
+        if type(newVal) is type(self._BridgeNodes):
+            self._BridgeNodes = newVal
         else:
             raise Exception("Wrong Paras")
     @property
     def MassList(self):
-        return self._SegMassList
+        return self._Masses
     @MassList.setter
     def MassList(self, newVal):
-        if type(newVal) is type(self._SegMassList):
-            self._SegMassList = newVal
+        if type(newVal) is type(self._Masses):
+            self._Masses = newVal
         else:
             raise Exception("Wrong Paras")
     
@@ -870,11 +940,11 @@ class LineBoxSeg(Segment):
     __slots__ = []
     @property
     def MassList(self):
-        return self._SegMassList
+        return self._Masses
     @MassList.setter
     def MassList(self, newVal):
-        if type(newVal) is type(self._SegMassList):
-            self._SegMassList = newVal
+        if type(newVal) is type(self._Masses):
+            self._Masses = newVal
         else:
             raise Exception("Wrong Paras")
     
@@ -891,11 +961,11 @@ class LineBoxSeg(Segment):
 
         super(LineBoxSeg, self).__init__(node_i, node_j, SectParas_i, SectParas_j, elementType, power, localZ, eleLengthList, eleDictParams, name)
         self._con = con
-        self._BridgeNodeList, self._SegSectList, self._SegMassList, self._SegElementList = self._Build()
+        self._BridgeNodes, self._SegSectList, self._Masses, self._Elements = self._Build()
 
     def _Build(self):
         if UtilTools.Util.TOLEQ(sum(self._eleLengthList), self._totalLen) and self._eleLengthList is not None:
-            points = UtilTools.PointsTools.LinePointBuilder(self._Ni.point, self._Nj.point, self._eleLengthList)
+            points = UtilTools.PointsTools.LinePointBuilder(self._BridgeNodeI.point, self._BridgeNodeJ.point, self._eleLengthList)
             SectI:Paras.BoxSectParas = self._Secti
             SectJ:Paras.BoxSectParas = self._Sectj
 
@@ -908,11 +978,11 @@ class LineBoxSeg(Segment):
             web_T =  UtilTools.SegmentTools.PowerParasBuilder(SectI.web_T, SectJ.web_T, self._totalLen, 1, self._eleLengthList)
 
             h =  UtilTools.SegmentTools.PowerParasBuilder(SectI.H, SectJ.H, self._totalLen, self._p, self._eleLengthList)
-            N_axis =  UtilTools.PointsTools.vectSub(self._Nj.point, self._Ni.point)
+            N_axis = UtilTools.PointsTools.VectorSub(self._BridgeNodeJ.point, self._BridgeNodeI.point)
             l_paras:list[Paras.BoxSectParas] = []
             l_node:list[BridgeNode] = []
             l_sect:list[BoxSect] = []
-            l_element:list[OpsObject.OpsElement] = []
+            l_element:list[OpsObject.OpsLineElement] = []
             l_mass:list[float] = []
             
             for p in points:
@@ -932,7 +1002,7 @@ class LineBoxSeg(Segment):
                 l_mass.append(mass)
                 l_node[i].addMass(mass/2)
                 l_node[i+1].addMass(mass/2)
-                ele = self.BuildElement(self._ElementType, l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, **self._ElementDictParams) 
+                ele = self.BuildElement(self._ElementType, l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, **self._ElementExtraDictParams) 
                 # ele = OpsObject.OpsEBCElement(l_node[i].OpsNode, 
                 #                     l_node[i+1].OpsNode,
                 #                     l_sect[i].OpsSect,
@@ -945,21 +1015,21 @@ class LineBoxSeg(Segment):
 
     @property
     def NodeI(self):
-        return self._Ni
+        return self._BridgeNodeI
     @NodeI.setter
     def NodeI(self, newVal):
-        if type(newVal) is type(self._Ni):
-            self._Ni = newVal
+        if type(newVal) is type(self._BridgeNodeI):
+            self._BridgeNodeI = newVal
         else:
             raise Exception("Wrong Paras")
      
     @property
     def NodeJ(self):
-        return self._Nj
+        return self._BridgeNodeJ
     @NodeJ.setter
     def NodeJ(self, newVal):
-        if type(newVal) is type(self._Nj):
-            self._Nj = newVal
+        if type(newVal) is type(self._BridgeNodeJ):
+            self._BridgeNodeJ = newVal
         else:
             raise Exception("Wrong Paras")
      
@@ -1006,29 +1076,29 @@ class LineBoxSeg(Segment):
 
     @property
     def ELeList(self):
-        return self._SegElementList
+        return self._Elements
     @ELeList.setter
     def ELeList(self, newVal):
-        if type(newVal) is type(self._SegElementList):
-            self._SegElementList = newVal
+        if type(newVal) is type(self._Elements):
+            self._Elements = newVal
         else:
             raise Exception("Wrong Paras")
     @property
     def NodeList(self):
-        return self._BridgeNodeList
+        return self._BridgeNodes
     @NodeList.setter
     def NodeList(self, newVal):
-        if type(newVal) is type(self._BridgeNodeList):
-            self._BridgeNodeList = newVal
+        if type(newVal) is type(self._BridgeNodes):
+            self._BridgeNodes = newVal
         else:
             raise Exception("Wrong Paras")
     @property
     def MassList(self):
-        return self._SegMassList
+        return self._Masses
     @MassList.setter
     def MassList(self, newVal):
-        if type(newVal) is type(self._SegMassList):
-            self._SegMassList = newVal
+        if type(newVal) is type(self._Masses):
+            self._Masses = newVal
         else:
             raise Exception("Wrong Paras")
     
@@ -1044,29 +1114,29 @@ class LineBoxSeg(Segment):
     
     @property
     def val(self):
-        return [self._Ni, self._Nj, self._Secti, self._Sectj, self._ElementType, self._con, self._localZAxis, self._eleLengthList, self._p]
+        return [self._BridgeNodeI, self._BridgeNodeJ, self._Secti, self._Sectj, self._ElementType, self._con, self._localZAxis, self._eleLengthList, self._p]
 # 
 class LineHRoundSeg(Segment):
     @Comp.CompMgr()
-    def __init__(self, point_i: tuple[float, ...], point_j: tuple[float, ...], SectParas_i:Paras.HRoundSectParas, SectParas_j:Paras.HRoundSectParas, elementType:Segment.SupportedElementType, ConCore:Paras.ConcreteParas, ConCover:Paras.ConcreteParas, Rebar:Paras.SteelParas, eleLengthList: list[float], RebarRList:list[float]=None, RebarDistrParasList:list[Paras.SectRebarDistrParas]=None, localZ: tuple[float]=None, elemetDictParam:dict={}, name=""):
-        super().__init__(point_i, point_j, SectParas_i, SectParas_j, elementType, 1, localZ, eleLengthList, elemetDictParam, name)
+    def __init__(self, point_i: tuple[float, ...], point_j: tuple[float, ...], SectParas_i:Paras.HRoundSectParas, SectParas_j:Paras.HRoundSectParas, elementType:Segment.SupportedElementType, ConCore:Paras.ConcreteParas, ConCover:Paras.ConcreteParas, Rebar:Paras.SteelParas, eleLengthList: list[float], RebarRList:list[float]=None, RebarDistrParasList:list[Paras.SectRebarDistrParas]=None, localZ: tuple[float]=None, elementDictParam:dict={}, name=""):
+        super().__init__(point_i, point_j, SectParas_i, SectParas_j, elementType, 1, localZ, eleLengthList, elementDictParam, name)
         self._CoreCon = ConCore
         self._CoverCon = ConCover
         self._Rebar = Rebar
 
         if RebarDistrParasList and len(RebarDistrParasList) == len(eleLengthList):
-            print("INFO:As 'RebarDistrParasList' was used, 'RebarRList' is ingored")
+            print("INFO:As 'RebarDistrParasList' was used, 'RebarRList' is ignored")
             self._R = RebarDistrParasList
         elif RebarRList and len(RebarRList) == len(eleLengthList):
             self._R = RebarRList
         else:
             raise Exception("Wrong Params, RebarDistParasList and RebarRList can not be None at same time, and the length should be same with eleLengthList.")
 
-        self._BridgeNodeList, self._SegSectList, self._SegMassList, self._SegElementList = self._Build()
+        self._BridgeNodes, self._SegSectList, self._Masses, self._Elements = self._Build()
 
     def _Build(self):
-        if UtilTools.Util.TOLEQ(sum(self._eleLengthList), self._totalLen) and self._eleLengthList is not None:
-            points = UtilTools.PointsTools.LinePointBuilder(self._Ni.point, self._Nj.point, self._eleLengthList)
+        if UtilTools.Util.TOL_EQ(sum(self._eleLengthList), self._totalLen) and self._eleLengthList is not None:
+            points = UtilTools.PointsTools.LinePointBuilder(self._BridgeNodeI.point, self._BridgeNodeJ.point, self._eleLengthList)
             SectI:Paras.HRoundSectParas = self._Secti
             SectJ:Paras.HRoundSectParas = self._Sectj
 
@@ -1079,7 +1149,7 @@ class LineHRoundSeg(Segment):
             l_paras:list[Paras.HRoundSectParas] = []
             l_node:list[BridgeNode] = []
             l_sect:list[HRoundRCSect] = []
-            l_element:list[OpsObject.OpsElement] = []
+            l_element:list[OpsObject.OpsLineElement] = []
             l_mass:list[float] = []
             
             for p in points:
@@ -1102,7 +1172,7 @@ class LineHRoundSeg(Segment):
                 l_node[i].addMass(mass/2)
                 l_node[i+1].addMass(mass/2)
                 
-                ele = self.BuildElement(self._ElementType, l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, **self._ElementDictParams)
+                ele = self.BuildElement(self._ElementType, l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, **self._ElementExtraDictParams)
                 # ele = OpsObject.OpsEBCElement(l_node[i].OpsNode, 
                 #                     l_node[i+1].OpsNode,
                 #                     l_sect[i].OpsSect,
@@ -1118,29 +1188,29 @@ class LineHRoundSeg(Segment):
 
     @property
     def ELeList(self):
-        return self._SegElementList
+        return self._Elements
     @ELeList.setter
     def ELeList(self, newVal):
-        if type(newVal) is type(self._SegElementList):
-            self._SegElementList = newVal
+        if type(newVal) is type(self._Elements):
+            self._Elements = newVal
         else:
             raise Exception("Wrong Paras")
     @property
     def NodeList(self):
-        return self._BridgeNodeList
+        return self._BridgeNodes
     @NodeList.setter
     def NodeList(self, newVal):
-        if type(newVal) is type(self._BridgeNodeList):
-            self._BridgeNodeList = newVal
+        if type(newVal) is type(self._BridgeNodes):
+            self._BridgeNodes = newVal
         else:
             raise Exception("Wrong Paras")
     @property
     def MassList(self):
-        return self._SegMassList
+        return self._Masses
     @MassList.setter
     def MassList(self, newVal):
-        if type(newVal) is type(self._SegMassList):
-            self._SegMassList = newVal
+        if type(newVal) is type(self._Masses):
+            self._Masses = newVal
         else:
             raise Exception("Wrong Paras")
     
@@ -1155,29 +1225,29 @@ class LineHRoundSeg(Segment):
             raise Exception("Wrong Paras")
     @property
     def ELeList(self):
-        return self._SegElementList
+        return self._Elements
     @ELeList.setter
     def ELeList(self, newVal):
-        if type(newVal) is type(self._SegElementList):
-            self._SegElementList = newVal
+        if type(newVal) is type(self._Elements):
+            self._Elements = newVal
         else:
             raise Exception("Wrong Paras")
     @property
     def NodeList(self):
-        return self._BridgeNodeList
+        return self._BridgeNodes
     @NodeList.setter
     def NodeList(self, newVal):
-        if type(newVal) is type(self._BridgeNodeList):
-            self._BridgeNodeList = newVal
+        if type(newVal) is type(self._BridgeNodes):
+            self._BridgeNodes = newVal
         else:
             raise Exception("Wrong Paras")
     @property
     def MassList(self):
-        return self._SegMassList
+        return self._Masses
     @MassList.setter
     def MassList(self, newVal):
-        if type(newVal) is type(self._SegMassList):
-            self._SegMassList = newVal
+        if type(newVal) is type(self._Masses):
+            self._Masses = newVal
         else:
             raise Exception("Wrong Paras")
     
@@ -1193,7 +1263,7 @@ class LineHRoundSeg(Segment):
     
     @property
     def val(self):
-        return [self._Ni, self._Nj, self._Secti, self._Sectj, self._CoreCon, self._CoverCon, self._Rebar, self._localZAxis, self._eleLengthList, self._R]
+        return [self._BridgeNodeI, self._BridgeNodeJ, self._Secti, self._Sectj, self._CoreCon, self._CoverCon, self._Rebar, self._localZAxis, self._eleLengthList, self._R]
 
 class LineSRoundSeg(Segment):
     @Comp.CompMgr()
@@ -1211,10 +1281,10 @@ class LineSRoundSeg(Segment):
         else:
             raise Exception("Wrong Params, RebarDistParasList and RebarRList can not be None at same time, and the length should be same with eleLengthList.")
 
-        self._BridgeNodeList, self._SegSectList, self._SegMassList, self._SegElementList = self._Build()
+        self._BridgeNodes, self._SegSectList, self._Masses, self._Elements = self._Build()
         
     def _Build(self):
-        points = UtilTools.PointsTools.LinePointBuilder(self._Ni.point, self._Nj.point, self._eleLengthList)
+        points = UtilTools.PointsTools.LinePointBuilder(self._BridgeNodeI.point, self._BridgeNodeJ.point, self._eleLengthList)
         SectI:Paras.SRoundSectParas = self._Secti
         SectJ:Paras.SRoundSectParas = self._Sectj
 
@@ -1225,7 +1295,7 @@ class LineSRoundSeg(Segment):
         l_paras:list[Paras.SRoundSectParas] = []
         l_node:list[BridgeNode] = []
         l_sect:list[SRoundRCSect] = []
-        l_element:list[OpsObject.OpsElement] = []
+        l_element:list[OpsObject.OpsLineElement] = []
         l_mass:list[float] = []
         
         for p in points:
@@ -1254,7 +1324,7 @@ class LineSRoundSeg(Segment):
             #                     l_sect[i].OpsSect,
             #                     self._localZAxis
             #                     )
-            ele = self.BuildElement(self._ElementType, l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, **self._ElementDictParams)
+            ele = self.BuildElement(self._ElementType, l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, **self._ElementExtraDictParams)
             # ele = OpsObject.OpsNBCElement(l_node[i].OpsNode, l_node[i+1].OpsNode, l_sect[i].OpsSect, self._localZAxis, 5)
 
             l_element.append(ele) 
@@ -1263,31 +1333,31 @@ class LineSRoundSeg(Segment):
     
     @property
     def ELeList(self):
-        return self._SegElementList
+        return self._Elements
     @ELeList.setter
     def ELeList(self, newVal):
-        if type(newVal) is type(self._SegElementList):
-            self._SegElementList = newVal
+        if type(newVal) is type(self._Elements):
+            self._Elements = newVal
         else:
             raise Exception("Wrong Paras")
 
     @property
     def NodeList(self):
-        return self._BridgeNodeList
+        return self._BridgeNodes
     @NodeList.setter
     def NodeList(self, newVal):
-        if type(newVal) is type(self._BridgeNodeList):
-            self._BridgeNodeList = newVal
+        if type(newVal) is type(self._BridgeNodes):
+            self._BridgeNodes = newVal
         else:
             raise Exception("Wrong Paras")
 
     @property
     def MassList(self):
-        return self._SegMassList
+        return self._Masses
     @MassList.setter
     def MassList(self, newVal):
-        if type(newVal) is type(self._SegMassList):
-            self._SegMassList = newVal
+        if type(newVal) is type(self._Masses):
+            self._Masses = newVal
         else:
             raise Exception("Wrong Paras")
     
@@ -1302,7 +1372,861 @@ class LineSRoundSeg(Segment):
             raise Exception("Wrong Paras")
     @property
     def val(self):
-        return [self._Ni, self._Nj, self._Secti, self._Sectj, self._CoreCon, self._CoverCon, self._Rebar, self._localZAxis, self._eleLengthList, self._R]
+        return [self._BridgeNodeI, self._BridgeNodeJ, self._Secti, self._Sectj, self._CoreCon, self._CoverCon, self._Rebar, self._localZAxis, self._eleLengthList, self._R]
+
+class Cuboid(Body):
+    class SupportedElementType(Enum):
+        StanderBrickElement = 'StanderBrickElement'
+
+    """
+                    z|H
+                    |
+                    |
+                    |      7_______6
+                    |     /|      /|
+                    |    / |     / |
+                    |___/__|3___/__|2____ y|W
+                   /   8___/___5   /   
+                  /    |  /    |  /   
+                 /     | /     | /   
+                /      |/______|/
+               x|L     4       1
+    """
+    
+    @abstractmethod
+    def __init__(self, p1:tuple[float, ...], p2:tuple[float, ...], p3:tuple[float, ...], p4:tuple[float, ...], p5:tuple[float, ...], p6:tuple[float, ...], p7:tuple[float, ...], p8:tuple[float, ...], eleLensL=[], eleLensW=[], eleLensH=[], name=""):
+        super().__init__(name)
+        self._type += '->Cube'
+        self._Node1 = BridgeNode(*p1)
+        self._Node2 = BridgeNode(*p2)
+        self._Node3 = BridgeNode(*p3)
+        self._Node4 = BridgeNode(*p4)
+        self._Node5 = BridgeNode(*p5)
+        self._Node6 = BridgeNode(*p6)
+        self._Node7 = BridgeNode(*p7)
+        self._Node8 = BridgeNode(*p8)
+
+        self._L = UtilTools.PointsTools.PointsDist(p1, p2) 
+        self._W = UtilTools.PointsTools.PointsDist(p1, p4) 
+        self._H = UtilTools.PointsTools.PointsDist(p1, p5) 
+        self._volume = self._L * self._W * self._H
+
+        self._eleLensL = eleLensL
+        self._eleLensW = eleLensW
+        self._eleLensH = eleLensH
+
+
+        self._volumeMass = None
+
+        self._BridgeNodes:np.ndarray = None
+        self._Elements:np.ndarray = None
+        self._PointsIndex:np.ndarray = None
+        self._Masses:np.ndarray = None
+        
+    
+    @abstractmethod
+    def _Build(self): ...
+    
+    def FindElement(self, p3):
+        flag, val = self.FindPointIndex(p3)
+        if flag:
+            i, j, k = val
+            return True, self._Elements[i, j, k]
+        else:
+            return False, None
+    
+    def FindElementIndex(self, ele:OpsObject.OpsBrickElement):
+        flag, val = self.FindPointIndex(ele._node3)
+        if flag:
+            return True, val
+        else:
+            return False, None
+    
+    def FindElementHasPoint(self, p):
+        e1 = e2 = e3 = e4 = e5 = e6 = e7 = e8 = None
+        flag, val = self.FindPointIndex(p)
+        if flag:
+            i, j, k = val
+
+            if k-1<0:
+                e1 = None
+            else:
+                e1 = self._Elements[i, j, k-1]
+
+            e5 = self._Elements[i, j, k]
+
+            if k-1<0 and j-1<0:
+                e2 = None
+            else:
+                e2 = self._Elements[i, j-1, k-1]
+
+            if j-1<0:
+                e6 = None
+            else:
+                e6 = self._Elements[i, j-1, k]
+
+            if i-1<0 or j-1<0 or k-1<0:
+                e3 = None
+            else:
+                e3 = self._Elements[i-1, j-1, k-1]
+            
+            if i-1<0 or j-1<0:
+                e7 = None
+            else:
+                e7 = self._Elements[i-1, j-1, k]
+
+            if i-1<0 or k-1<0:
+                e4 = None
+            else:
+                e4 = self._Elements[i-1, j, k-1]
+            
+            if i-1<0:
+                e8 = None
+            else:
+                e8 = self._Elements[i-1, j, k]
+
+            return True, [e1, e2, e3, e4, e5, e6, e7, e8]
+        else:
+            return False, None
+
+    def FindRangeElement(self, p3, l, w, h):
+        flag, val = self.FindRangeBridgeNodes(p3, l, w, h)
+        if flag:
+            # x, y, z = val
+
+            x, y, z = val.shape
+            # ix3, iy3, iz3 = self.FindBridgeNodeIndex(val[0,0,0])
+            # ix7, iy7, iz7 = self.FindBridgeNodeIndex(val[x-1,y-1,z-1])
+            flag, Nval = self.FindBridgeNodeIndex(val[0, 0, 0])
+            if flag:
+                ix3, iy3, iz3 = Nval
+            else:
+                return False, None
+
+            flag, Nval = self.FindBridgeNodeIndex(val[x-1, y-1, z-1])
+
+            if flag:
+                ix5, iy5, iz5 = Nval
+            else:
+                return False, None
+            if ix3 == ix5 or iy3==iy5 or iz3== iz5:
+                return False, None
+
+            return True, self._Elements[ix3:ix5, iy3:iy5, iz3:iz5]
+        else:
+            return False, None
+
+            # return self._Elements[n1[0]:n7[0], n1[1]:n7[1], n1[2]:n7[2]]
+            # ix = iy = iz = -1
+
+            # for idx in range(len(self._eleLensL) - x):
+            #     if sum(self._eleLensL[x:x+idx]) == l:
+            #         ix = x+idx+1
+            #         break
+            #     elif sum(self._eleLensL[x:x+idx]) > l:
+            #         ix = x+idx
+            #         break
+            
+            # for idx in range(len(self._eleLensW) - y):
+            #     if sum(self._eleLensW[y:y+idx]) == w:
+            #         iy = y+idx
+            #         break
+            #     elif sum(self._eleLensL[y:y+idx]) > w:
+            #         iy = y+idx-1
+            #         break
+
+            # for idx in range(len(self._eleLensH) - z):
+            #     if sum(self._eleLensH[z:z+idx]) == h:
+            #         iz = z+idx
+            #         break
+            #     elif sum(self._eleLensH[z:z+idx]) > h:
+            #         iz = z+idx-1
+            #         break
+
+            return True, self._Elements[x:ix+1, y:iy+1, z:iz+1]
+
+    def FindPointIndex(self, p):
+
+        L, W, H = self._PointsIndex.shape[:3]
+        flag_Found = False
+        for i in range(L):
+            # v1 = self._PointsIndex[i, 0, H-1]
+            # v2 = self._PointsIndex[i, W-1, 0]
+            v = UtilTools.PointsTools.VectorSub(p, self._PointsIndex[i, 0, 0])
+            if UtilTools.Util.isOnlyHas(v, [0], flatten=True):
+                return True, [i, 0, 0]
+            
+            if v[0] == 0:
+                flag_Found = True
+                break
+
+            # if UtilTools.PointsTools.IsVectorInPlane(v, v1, v2):
+            #     Found_flag = True
+            #     break
+
+        if not flag_Found:
+            return False, None
+        else:
+            flag_Found = False
+
+        for j in range(W):
+            # if UtilTools.PointsTools.IsPointInLine(p, self._PointsIndex[i, j, 0], self._PointsIndex[i, j, H-1]):
+            if p[1] == self._PointsIndex[i, j, 0][1]:
+                flag_Found = True
+                break
+
+        if not flag_Found:
+            return False, None
+        else:
+            flag_Found = False
+
+        for k in range(H):
+            if np.all(self._PointsIndex[i, j, k] == p):
+                return True, [i, j, k]
+        
+        return False, None
+    def FuzzyFindPoint(self, p, tol=None):
+        flag, val = self.FuzzyFindNode(p, tol)
+        if flag:
+            return True, val.point
+        else:
+            return False, None
+
+    def FindRangePointIndex(self, p3, l, w, h):
+        flag, val = self.FindPointIndex(p3)
+
+        if flag:
+            x, y, z = val
+            ix = iy = iz = -1
+            
+            if x == len(self._eleLensL):
+                ix = x
+            else:
+                for idx in range(len(self._eleLensL) - x):
+                    if sum(self._eleLensL[x:x+idx+1]) == l:
+                        ix = x+1+idx
+                        break
+                    elif sum(self._eleLensL[x:x+idx+1]) > l:
+                        ix = x+idx
+                        break
+            
+            if y == len(self._eleLensW):
+                iy = y
+            else:
+                for idx in range(len(self._eleLensW) - y):
+                    if sum(self._eleLensW[y:y+idx+1]) == w:
+                        iy = y+idx+1
+                        break
+                    elif sum(self._eleLensW[y:y+idx+1]) > w:
+                        iy = y+idx
+                        break
+
+            if z == len(self._eleLensW):
+                iz = z
+            else:
+                for idx in range(len(self._eleLensH) - z):
+                    if sum(self._eleLensH[z:z+idx+1]) == h:
+                        iz = z+idx+1
+                        break
+                    elif sum(self._eleLensH[z:z+idx+1]) > h:
+                        iz = z+idx
+                        break
+
+            return True, [(x, ix+1), (y, iy+1), (z, iz+1)]
+        else:
+            return False, None
+
+
+    def FindBridgeNode(self, p:tuple[float, ...]): 
+        flag, val = self.FindPointIndex(p)
+        if flag:
+            i, j, k = val
+            return True, self._BridgeNodes[i, j, k]
+        else:
+            return False, None
+
+    def FindBridgeNodeIndex(self, briNode:BridgeNode):
+        flag, val = self.FindPointIndex(briNode.point)
+        if flag:
+            return True, val
+        else:
+            return False, None
+
+    def FuzzyFindNode(self, p, tol=None):
+        ps:list[BridgeNode] = self._BridgeNodes.flatten().tolist()
+        tempN = None
+        tempDis = GlobalData.DEFVAL._MAXVAL_
+        for n in ps:
+            dis = UtilTools.PointsTools.PointsDist(n.point, p)
+
+            if tol and not UtilTools.Util.TOL_LE(dis, tol):
+                dis = GlobalData.DEFVAL._MAXVAL_
+
+            tempDis, tempN = (dis, n) if dis < tempDis else (tempDis, tempN)
+        
+        if not UtilTools.Util.TOL_GE(tempDis, GlobalData.DEFVAL._MAXVAL_):
+            return True, tempN
+        else:
+            return False, None
+
+    def FindRangeBridgeNodes(self, p3:tuple[float], l:float, w:float, h:float):
+        flag, val = self.FindRangePointIndex(p3, l, w, h)
+        if flag:
+            (x1, x2), (y1, y2), (z1, z2) = val
+            return True, self._BridgeNodes[x1:x2, y1:y2, z1:z2]
+        else:
+            return False, None
+
+    def BuildElement(self, elementType:SupportedElementType, *args, **kwargs):
+        if elementType == self.SupportedElementType:
+            ele = OpsObject.OpsStanderBrickElement(*args, **kwargs)
+        else:
+            message = 'Unsupported Element Type'
+            StandardLogger.error(message)
+            raise Exception(message)
+        
+        return ele
+
+class SoilCuboid(Cuboid):
+    # @property
+    @Comp.CompMgr()
+    def __init__(self, p1: tuple[float, ...], p2: tuple[float, ...], p3: tuple[float, ...], p4: tuple[float, ...], p5: tuple[float, ...], p6: tuple[float, ...], p7: tuple[float, ...], p8: tuple[float, ...], MaterialParas: Paras.ClayParas, eleLens_L:list[float], eleLens_W:list[float], eleLens_H:list[float], name=""):
+        super().__init__(p1, p2, p3, p4, p5, p6, p7, p8, eleLens_L, eleLens_W, eleLens_H, name)
+        self._MaterialParas = MaterialParas
+        self._volumeMass = self._volume * self._MaterialParas.rho
+        self._PointsIndex, self._BridgeNodes, self._Masses, self._Elements = self._Build() 
+
+    
+    def _Build(self):
+        # x_points = UtilTools.PointsTools.LinePointBuilder(self._Node3.point, self._Node4.point, self._eleLensX)
+        # y_points = UtilTools.PointsTools.LinePointBuilder(self._Node3.point, self._Node2.point, self._eleLensY)
+        # z_points = UtilTools.PointsTools.LinePointBuilder(self._Node3.point, self._Node7.point, self._eleLensZ)
+        numNode_L = len(self._eleLensL) + 1
+        numNode_Y = len(self._eleLensW) + 1
+        numNode_Z = len(self._eleLensH) + 1
+        np_P = np.empty((numNode_L, numNode_Y, numNode_Z, 3), dtype=np.float32)
+        np_N = np.empty((numNode_L, numNode_Y, numNode_Z), dtype=object)
+
+        # for i, px in enumerate(x_points):
+        #     for j, py in enumerate(y_points):
+        #         for k, pz in enumerate(z_points):
+        #             # np_P[i, j, k] = [px[0], py[1], pz[2]]
+        #             np_N[i, j, k] = BridgeNode(px[0], py[1], pz[2])
+        h1 = UtilTools.PointsTools.LinePointBuilder(self._Node1.point, self._Node5.point, self._eleLensH)
+        h2 = UtilTools.PointsTools.LinePointBuilder(self._Node2.point, self._Node6.point, self._eleLensH)
+        h3 = UtilTools.PointsTools.LinePointBuilder(self._Node3.point, self._Node7.point, self._eleLensH)
+        h4 = UtilTools.PointsTools.LinePointBuilder(self._Node4.point, self._Node8.point, self._eleLensH)
+
+        for k, (z1, z2, z3, z4) in enumerate(zip(h1, h2, h3, h4)):
+            w1 = UtilTools.PointsTools.LinePointBuilder(z3, z2, self._eleLensW)
+            w2 = UtilTools.PointsTools.LinePointBuilder(z4, z1, self._eleLensW)
+            for j, (y1, y2) in enumerate(zip(w1, w2)):
+                l = UtilTools.PointsTools.LinePointBuilder(y1, y2, self._eleLensL)
+                for i, p in enumerate(l):
+                    np_P[i,j,k] = [p[0], p[1], p[2]]
+                    np_N[i,j,k] = BridgeNode(p[0], p[1], p[2])
+
+        if type(self._MaterialParas) == Paras.ClayParas:
+            m = OpsObject.OpsClayMaterial(*self._MaterialParas.val)
+        elif type(self._MaterialParas) == Paras.SandParas:
+            m = OpsObject.OpsSandMaterial(*self._MaterialParas.val)
+
+        np_E = np.empty((numNode_L-1, numNode_Y-1, numNode_Z-1), dtype=object)
+        np_mass = np.empty_like(np_N, dtype=np.float32)
+
+        for i in range(numNode_L - 1):
+            for j in range(numNode_Y - 1):
+                for k in range(numNode_Z - 1):
+                    i3 = (i, j, k)
+                    i2 = (i, j+1, k)
+                    i4 = (i+1, j, k)
+                    i1 = (i+1, j+1, k)
+                    n3:BridgeNode = np_N[i3]
+                    n4:BridgeNode = np_N[i4]
+                    n2:BridgeNode = np_N[i2]
+                    n1:BridgeNode = np_N[i1]
+
+                    i7 = (i, j, k+1)
+                    i6 = (i, j+1, k+1)
+                    i8 = (i+1, j, k+1)
+                    i5 = (i+1, j+1, k+1)
+                    n7:BridgeNode = np_N[i7]
+                    n8:BridgeNode = np_N[i8]
+                    n6:BridgeNode = np_N[i6]
+                    n5:BridgeNode = np_N[i5]
+
+                    d = UtilTools.PointsTools.VectorSub(n5.point, n3.point)
+
+                    mass = m._rho * d[0]*d[1]*d[2] / 8
+
+                    np_mass[i1] = np_mass[i2] = np_mass[i3] = np_mass[i4] = np_mass[i5] = np_mass[i6] = np_mass[i7] = np_mass[i8] = mass
+
+                    np_E[i, j, k] = OpsObject.OpsStanderBrickElement(n1.OpsNode, n2.OpsNode, n3.OpsNode, n4.OpsNode, n5.OpsNode, n6.OpsNode, n7.OpsNode, n8.OpsNode, m.uniqNum)
+        # x_index = [x[0] for x in x_points]
+        # y_index = [x[1] for x in y_points]
+        # z_index = [x[2] for x in z_points]
+        return np_P, np_N, np_mass, np_E 
+
+    @classmethod
+    def FromP3_LWH(cls, p3, xl, yw, zh, MaterialParas: Paras.ClayParas, eleLensL=[], eleLensW=[], eleLensH=[]):
+        p1 = (p3[0]+xl, p3[1]+yw, p3[2])
+        p2 = (p3[0], p3[1]+yw, p3[2])
+        p4 = (p3[0]+xl, p3[1], p3[2])
+
+        p5 = (p3[0]+xl, p3[1]+yw, p3[2]+zh)
+        p6 = (p3[0], p3[1]+yw, p3[2]+zh)
+        p8 = (p3[0]+xl, p3[1], p3[2]+zh)
+        p7 = (p3[0], p3[1], p3[2]+zh)
+
+        return cls(p1, p2, p3, p4, p5, p6, p7, p8, MaterialParas, eleLensL, eleLensW, eleLensH)
+
+    @classmethod
+    def FromCuboidP3_P5(cls, p3, p5, MaterialParas: Paras.ClayParas, eleLensL=[], eleLensW=[], eleLensH=[]):
+        xl = p5[0] - p3[0]
+        yw = p5[1] - p3[1]
+        zh = p5[2] - p3[2]
+
+        return cls.FromP3_LWH(p3, xl, yw, zh, MaterialParas, eleLensL, eleLensW, eleLensH)
+    
+    @property
+    def val(self):
+        return [self._Node1, self._Node2, self._Node3, self._Node4, self._Node5, self._Node6, self._Node7, self._Node8]
+
+class BoundaryDescriptor(Comp.Parts, metaclass=ABCMeta):
+    @abstractmethod
+    def __init__(self, name=""):
+        super(Comp.Parts, self).__init__(name)
+        self._type += "Boundary"
+        self._activated = False
+    
+    @abstractmethod
+    def _activate(self): ...
+
+class BridgeFixedBoundary(BoundaryDescriptor):
+    # __slots__ = ['_type', '_uniqNum', '_name', '_Node', '_OpsFix']
+    # @Comp.CompMgr()
+    def __init__(self, node:BridgeNode, fixDOFs:list, name=""):
+        super(BridgeFixedBoundary, self).__init__(name)
+        self._type += "->FixedBoundary"
+        self._node = node
+        self._fixDOFs= fixDOFs
+        self._OpsFix = None
+     
+    def _SectReBuild(self):
+        # Comp.CompMgr.removeComp(self._OpsFix)
+        # self._OpsFix = OpsObject.OpsFix(self._node.OpsNode, self._fixVal)
+        ...
+    
+    def _activate(self):
+        # if self._activated:
+        #     return
+        self._OpsFix = OpsObject.OpsFix(self._node.OpsNode, self._fixDOFs)
+        self._activated = True
+
+    @property
+    def BridgeNode(self):
+        return self._node
+    @BridgeNode.setter
+    def BridgeNode(self, newVal):
+        if type(newVal) is type(self._node):
+            self._node = newVal
+            self._SectReBuild()
+        else:
+            raise Exception("Wrong Paras")
+    
+    @property
+    def fixVal(self):
+        return self._fixDOFs
+    @fixVal.setter
+    def fixVal(self, newVal):
+        if type(newVal) is type(self._fixDOFs):
+            self._fixDOFs = newVal
+        else:
+            raise Exception("Wrong Paras")
+    
+    @property
+    def val(self):
+        return [self._node, self._fixDOFs]
+
+class BridgeBearingBoundary(BoundaryDescriptor):
+    def __init__(self, nodeI:BridgeNode, nodeJ:BridgeNode, plasticStrain:float, E:float, DOFs:list[int], name=""):
+        super().__init__(name)
+        self._type += "Bridge Plastic Bearing Boundary"
+        self._EPPMaterial = OpsObject.OpsElasticPPMaterial(E, plasticStrain)
+        # self._Rigid = OpsObject.OpsElasticPPMaterial(10000 * E, 10000 * plasticStrain)
+        self._NodeI = nodeI
+        self._NodeJ = nodeJ
+        if UtilTools.Util.isOnlyHas(DOFs, [0, 1], flatten=True):
+            self._DOFs = DOFs
+        else:
+            raise Exception("Wrong Params")
+        # self._zMats = []
+        # for i, val in enumerate(dirt):
+        #     if val == 1:
+        #         self._zMats.append(self._EPPMaterial.uniqNum)
+        #     else:
+        #         self._zMats.append(self._Rigid.uniqNum)
+
+        self._BearingElement = None
+    
+    def _activate(self):
+        # if self._activated:
+        #     return
+        zMaterials = [self._EPPMaterial] * sum(self._DOFs)
+        self._BearingElement = OpsObject.OpsZLElement(self._NodeI.OpsNode, self._NodeJ.OpsNode, zMaterials, self._DOFs)
+        self._activated = True
+        return self._BearingElement
+
+    @property
+    def val(self):
+        return [self._EPPMaterial, self._NodeI, self._NodeJ, self._DOFs]
+
+class BridgeEQDOFSBoundary(BoundaryDescriptor):
+    def __init__(self, nodeI:BridgeNode, nodeJ:BridgeNode, DOFs:list[int], name=""):
+        super().__init__(name)
+        self._type = 'Bridge Equal Dofs boundary'
+        self._nodeI = nodeI
+        self._nodeJ = nodeJ
+        self._OpsEQDOF = None
+
+        if UtilTools.Util.isOnlyHas(DOFs, [0, 1], flatten=True):
+            self._Dofs = DOFs
+        else:
+            raise Exception('Wrong paras')
+    
+    def _activate(self):
+        # if self._activated:
+        #     return
+
+        dofs = []
+        for i, val in enumerate(self._Dofs):
+            if val == 1:
+                dofs.append(i+1)
+    
+        self._OpsEQDOF = OpsObject.OpsEqualDOF(self._nodeI.OpsNode, self._nodeJ.OpsNode, dofs)
+        self._activated = True
+
+    @property
+    def val(self):
+        return [self._nodeI, self._nodeJ, self._Dofs]
+
+class BridgeSimplePileSoilBoundary(BoundaryDescriptor):
+    def __init__(self, nodeI:BridgeNode, nodeJ:BridgeNode, soil:Paras.SoilParas, pileD, Cu, pileEnd=False, h=None, name=""):
+        super().__init__(name)
+        self._type += 'Bridge Pile-Soil Interaction Boundary'
+        self._NodeI = nodeI
+        self._NodeJ = nodeJ
+        self._pileD = pileD
+        self._Cu = Cu
+        self._soil = soil
+        self._pileEnd = pileEnd
+        if h:
+            self._z = h
+        else:
+            self._z = -nodeI[2]
+    
+    
+    def _activate(self):
+        # if self._activated:
+        #     return
+        # self
+        paras:Paras.ClayParas = self._soil
+        gamma = paras.rho * GlobalData.DEFVAL._G_
+        z = self._z
+        if paras.clayType == 'SoftClay':
+            J = 0.25
+            epsu = 0.02
+            soilType = 1
+        elif paras.clayType == 'MediumClay':
+            J = 0.375
+            epsu = 0.01
+            soilType = 1
+        elif paras.clayType == 'StiffClay':
+            J = 0.5
+            epsu = 0.005
+            soilType = 1
+        else:
+            J = 1.0
+            epsu = 0.001
+            soilType = 2
+
+        pult = min(9 * self._Cu * self._pileD, [3 + gamma/self._Cu*z + J/self._pileD*z]* self._Cu * self._pileD)
+        y50 = 2.5 * epsu * self._pileD
+        Cd = 0.3
+        py = OpsObject.OpsPySimpleMaterial(pult, y50, Cd, soilType=soilType)
+
+        phi = self._Cu / (gamma * z)
+        if phi <= 1:
+            alpha = 0.5 * phi ** -0.25
+        else:
+            alpha = 0.5 * phi ** -0.5
+        tult = alpha * self._Cu * self._pileD * np.pi
+        z50 = 0.5 * self._pileD / 6
+        tz = OpsObject.OpsTzSimpleMaterial(tult, z50, soilType=soilType)
+
+        qult = 9 * self._Cu * np.pi * (self._pileD/2)**2
+        q50 = 0.1 * self._pileD
+        
+        qz = OpsObject.OpsQzSimpleMaterial(qult, q50, soilType=soilType)
+
+        if self._pileEnd:
+            zmat = qz
+        else:
+            zmat = tz
+
+        return OpsObject.OpsZLElement(self._NodeI.OpsNode, self._NodeJ.OpsNode, [py, py, zmat], [1, 2, 3])
+
+
+
+    @abstractmethod    
+    def val(self):
+        return [self._NodeI, self._NodeJ, self._Cu, self._pileD]
+
+class BridgeFullPileSoilBoundary(BoundaryDescriptor):
+    def __init__(self, pileSeg_: list[LineSRoundSeg], soilMaterial:Paras.SandParas, soilHalfL_:list[float]=None, soilHalfW_:list[float]=None, soilHalfH_:list[float]=None, name=""):
+        super().__init__(name)
+        self._type += 'Bridge Full Pile Soil Boundary'
+        self._pileSegs = pileSeg_
+        self._SoilMaterial = soilMaterial
+        self._SoilL = soilHalfL_
+        self._SoilW = soilHalfW_
+        self._SoilH = soilHalfH_
+        self._SoilCuboids = None
+        
+    @property
+    def val(self):
+        return [self._pileSegs, self._SoilL, self._SoilW, self._SoilH]
+    
+    def _activate(self):
+        # if self._activated:
+        #     return
+        if len(self._pileSegs) == 1:
+            paras:Paras.SRoundSectParas = self._pileSegs[0]._Secti
+            r = paras.R
+
+            soilH = sum(self._SoilH)
+            soilL = sum(self._SoilL)
+            soilW = sum(self._SoilW)
+            segH = sum(self._pileSegs[0].EleLength)
+
+            x0t, y0t, z0t = self._pileSegs[0]._BridgeNodeI.point
+
+            xdt, ydt, zdt = x0t+r, y0t+r, z0t
+            xct, yct, zct = x0t+r, y0t-r, z0t
+            xbt, ybt, zbt = x0t-r, y0t-r, z0t
+            xat, yat, zat = x0t-r, y0t+r, z0t
+
+            xdm, ydm, zdm = x0t+r, y0t+r, z0t-segH
+            xcm, ycm, zcm = x0t+r, y0t-r, z0t-segH
+            xbm, ybm, zbm = x0t-r, y0t-r, z0t-segH
+            xam, yam, zam = x0t-r, y0t+r, z0t-segH
+
+            xdb, ydb, zdb = x0t+r, y0t+r, z0t-segH-soilH
+            xcb, ycb, zcb = x0t+r, y0t-r, z0t-segH-soilH
+            xbb, ybb, zbb = x0t-r, y0t-r, z0t-segH-soilH
+            xab, yab, zab = x0t-r, y0t+r, z0t-segH-soilH
+
+            rev_L = self._SoilL.copy()
+            rev_L.reverse()
+            
+            rev_W =self._SoilW.copy()
+            rev_W.reverse()
+            """
+            |_____y
+            |
+            |x
+
+            #------------|#----|#------------ 
+            |    block3  |  2  | block1     |                       ________________________   ___
+            |            |     |            |                                 | |               |
+            #-----------%|#b-a%|#-----------%                       ----------|-|-----------    |
+            |    block4  |  9  | block8     |  ___                  ----------|-|-----------    segh
+            #-----------%|#c-d%|#-----------%   ^                   ----------|-|-----------    |
+            |            |     |            |   |                   __________|_|___________   _|_
+            |    block5  |  6  | block7     |   soilL                         | |               |
+            ----------5-%|----%|------------%  _|_                  __________|_|___________    soilH
+                                                                              | |               |
+            |<---------->|--d--|<---soilW-->|                       __________|_|___________   _|_
+            """
+            msgStart = 'create block {}'
+            msgEnd = 'block {} finished, spend time {}'
+
+            eleLenH = self._SoilH + self._pileSegs[0].EleLength
+
+            # * block 1 
+            print(msgStart.format(1))
+            timeStart = time.time()
+            p3 = xab-soilL,         yab, zab
+            p5 =       xat, yat + soilW, zat
+            block1 = SoilCuboid.FromCuboidP3_P5(p3, p5, self._SoilMaterial, rev_L, self._SoilW, eleLenH)
+            timeEnd = time.time()
+            print(msgEnd.format(1, timeEnd-timeStart))
+
+            # * block 2 
+            print(msgStart.format(2))
+            timeStart = time.time()
+            p3 = xbb-soilL,         ybb, zbb
+            p5 =       xbt,     ybt + r*2, zbt
+
+            block2 = SoilCuboid.FromCuboidP3_P5(p3, p5, self._SoilMaterial, rev_L, [r]*2, eleLenH)
+            timeEnd = time.time()
+            print(msgEnd.format(2, timeEnd-timeStart))
+
+            # * block 3 
+            print(msgStart.format(3))
+            timeStart = time.time()
+            p3 = xbb-soilL, xbb-soilW, zbb
+            p5 =       xbt,       xbt, zbt
+            block3 = SoilCuboid.FromCuboidP3_P5(p3, p5, self._SoilMaterial, rev_L, rev_W, eleLenH)
+            timeEnd = time.time()
+            print(msgEnd.format(3, timeEnd-timeStart))
+
+            # * block 4 
+            print(msgStart.format(4))
+            timeStart = time.time()
+            p3 = xcb-r*2, ycb-soilW, zcb
+            p5 =   xct,       yct, zct
+            block4 = SoilCuboid.FromCuboidP3_P5(p3, p5, self._SoilMaterial, [r]*2, rev_W, eleLenH)
+            timeEnd = time.time()
+            print(msgEnd.format(4, timeEnd-timeStart))
+
+            # * block 5 
+            print(msgStart.format(5))
+            timeStart = time.time()
+            p3 =       xcb, ycb-soilW, zcb
+            p5 = xct+soilL,       yct, zct
+            block5 = SoilCuboid.FromCuboidP3_P5(p3, p5, self._SoilMaterial, self._SoilL, rev_W, eleLenH)
+            timeEnd = time.time()
+            print(msgEnd.format(5, timeEnd-timeStart))
+
+            # * block 6 
+            print(msgStart.format(6))
+            timeStart = time.time()
+            p3 =       xcb,   ycb, zcb
+            p5 = xct+soilL, yct+r*2, zct
+            block6 = SoilCuboid.FromCuboidP3_P5(p3, p5, self._SoilMaterial, self._SoilL, [r]*2, eleLenH)
+            timeEnd = time.time()
+            print(msgEnd.format(6, timeEnd-timeStart))
+
+            # * block 7 
+            print(msgStart.format(7))
+            timeStart = time.time()
+            p3 =       xdb,       ydb, zdb
+            p5 = xdt+soilL, ydt+soilW, zdt
+            block7 = SoilCuboid.FromCuboidP3_P5(p3, p5, self._SoilMaterial, self._SoilL, self._SoilW, eleLenH)
+            timeEnd = time.time()
+            print(msgEnd.format(7, timeEnd-timeStart))
+
+            # * block 8 
+            print(msgStart.format(8))
+            timeStart = time.time()
+            p3 =   xab,       yab, zab
+            p5 = xat+r*2, yat+soilW, zat
+            block8 = SoilCuboid.FromCuboidP3_P5(p3, p5, self._SoilMaterial, [r]*2, self._SoilW, eleLenH)
+            timeEnd = time.time()
+            print(msgEnd.format(8, timeEnd-timeStart))
+
+            # * block 9
+            print(msgStart.format(9))
+            timeStart = time.time()
+            p3 = xbb, ybb, zbb
+            p5 = xdm, ydm, zdm
+            block9 = SoilCuboid.FromCuboidP3_P5(p3, p5, self._SoilMaterial, [r]*2, [r]*2, self._SoilH)
+            timeEnd = time.time()
+            print(msgEnd.format(9, timeEnd-timeStart))
+
+            self._SoilCuboids = [block1, block2, block3, block4, block5, block6, block7, block8, block9]
+
+            # * 约束土体底面
+            all_fix_node = []
+            for b in self._SoilCuboids:
+                flag, val = b.FindRangeBridgeNodes(b._Node3.point,b._L, b._W, 0)
+                if flag:
+                    ns:list[BridgeNode] =val.flatten().tolist()
+                    all_fix_node += ns
+
+            all_fix_des = []
+            for n in all_fix_node:
+                all_fix_des.append(BridgeFixedBoundary(n, [1]*6))
+            
+            # * equal DOFs
+            suface_pair1 = [(0, 2), (7, 3), (6,4)]
+            for bI1, bI2 in suface_pair1:
+                b1 = self._SoilCuboids[bI1]
+                b2 = self._SoilCuboids[bI2]
+                flag1, BridgeNs1 = b1.FindRangeBridgeNodes(b1._Node2.point, b1._L, 0, b1._H)
+                flag2, BridgeNs2 = b2.FindRangeBridgeNodes(b2._Node3.point, b2._L, 0, b2._H)
+
+                all_eqDof_des = []
+                if flag1 and flag2 and BridgeNs1.shape == BridgeNs2.shape:
+                    l, w, h = BridgeNs1.shape
+                    for x in range(l):
+                        for y in range(w):
+                            for z in range(h):
+                                bn1 = BridgeNs1[x, y, z]
+                                bn2 = BridgeNs2[x, y, z]
+                                all_eqDof_des.append(BridgeEQDOFSBoundary(bn1, bn2, [1, 1, 1, 0, 0, 0]))
+                else:
+                    raise Exception("wrong paras, can not find points or points num are not equal")
+            
+            suface_pair2 = [(0, 6), (1, 5), (2,4)]
+            for bI1, bI2 in suface_pair2:
+                b1 = self._SoilCuboids[bI1]
+                b2 = self._SoilCuboids[bI2]
+                flag1, BridgeNs1 = b1.FindRangeBridgeNodes(b1._Node3.point, 0, b1._W, b1._H)
+                flag2, BridgeNs2 = b2.FindRangeBridgeNodes(b2._Node4.point, 0, b2._W, b2._H)
+
+                if flag1 and flag2 and BridgeNs1.shape == BridgeNs2.shape:
+                    l, w, h = BridgeNs1.shape
+                    for x in range(l):
+                        for y in range(w):
+                            for z in range(h):
+                                bn1 = BridgeNs1[x, y, z]
+                                bn2 = BridgeNs2[x, y, z]
+                                all_eqDof_des.append(BridgeEQDOFSBoundary(bn1, bn2, [1, 1, 1, 0, 0, 0]))
+                else:
+                    raise Exception("wrong paras")
+
+            all_connet_des = []
+            # * connect soil and pile
+            segBottomPoint = self._pileSegs[0]._BridgeNodeJ.point
+            x, y, z =segBottomPoint
+            flag1, nodes1 = self._SoilCuboids[5].FindRangeBridgeNodes((x+r, y, z), 0, 0, -z)
+            flag2, nodes2 = self._SoilCuboids[7].FindRangeBridgeNodes((x, y+r, z), 0, 0, -z)
+
+            if flag1 and flag2 and nodes1.shape == nodes2.shape:
+                nodes1 = nodes1.flatten().tolist()
+                nodes2 = nodes2.flatten().tolist()
+                if len(nodes1) == len(self._pileSegs[0]._BridgeNodes):
+                    for n1, n2, p in zip(nodes1, nodes2, self._pileSegs[0]._BridgeNodes):
+                        all_connet_des.append(BridgeEQDOFSBoundary(p, n1, [1, 1, 0, 0, 0, 0] ))
+                        all_connet_des.append(BridgeEQDOFSBoundary(p, n2, [1, 1, 0, 0, 0, 0] ))
+                else:
+                    raise Exception("Wrong param, nodes in pile are not equal to nodes in soil")
+            else:
+                raise Exception("Wrong param, canot find nodes or the nodes shape are not equal")
+
+
+            
+            # for bridgeN in self._pileSegs[0].NodeList:
+            #     x, y, z = bridgeN.point
+            #     p = (x+r, y, z)
+            #     # flag , n = self._SoilCuboids[5].FindBridgeNode(p)
+            #     flag, n = self._SoilCuboids[5].FindBridgeNode()
+            #     if not flag:
+            #         raise Exception("Can not find point:{} in block 6".format(p))
+            #     all_connet_des.append(BridgeEQDOFSBoundary(bridgeN, n, [1, 1, 0, 0, 0, 0] ))
+                
+            #     p = (x, y+r, z)
+            #     flag , n = self._SoilCuboids[7].FindBridgeNode(p)
+            #     if not flag:
+            #         raise Exception("Can not find point:{} in block 8".format(p))
+            #     all_connet_des.append(BridgeEQDOFSBoundary(bridgeN, n, [1, 1, 0, 0, 0, 0] ))
+            
+            self._activated = True
+            return all_fix_des, all_eqDof_des, all_connet_des
+
+                
 
 #TODO
 class BridgeModel(Comp.Parts):
@@ -1322,7 +2246,7 @@ class BridgeModel(Comp.Parts):
                 self._BridgeParas = arg
             elif isinstance(arg, Paras.MaterialParas):
                 self._Materials.append(arg)
-            elif isinstance(arg, Boundary):
+            elif isinstance(arg, BoundaryDescriptor):
                 self._Boundaries.append(arg)
             elif isinstance(arg, LineBoxSeg):
                 self._Girder = arg

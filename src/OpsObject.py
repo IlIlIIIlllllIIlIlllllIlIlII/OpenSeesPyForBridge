@@ -1,6 +1,10 @@
 # * OpsObj类不需要有Getter和setter
-from abc import ABCMeta, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
+from asyncio import protocols
+from dataclasses import make_dataclass
 from symbol import factor
+from tkinter import dialog
+from xml.dom.minidom import Element
 import numpy as np
 import openseespy.opensees as ops
 from enum import Enum
@@ -13,11 +17,17 @@ from . import UtilTools
 from .log import *
 
 # * 桥梁节点类 表示有限元节点
+# class OpsO(Comp.OpsObj):
+#     def __init__(self, name=""):
+#         super().__init__(name)
+
+    
 class OpsNode(Comp.OpsObj):
-    __slots__ = ["_type", "_uniqNum", "_name", "_xyz"]
+    # __slots__ = ["_type", "_uniqNum", "_name", "_xyz"]
     @Comp.CompMgr()
     def __init__(self, xyz: tuple, name=""):
         super(OpsNode, self).__init__(name)
+        # self = self._VALCOMPLETE(xyz)
         self._type += "->Ops Node"
 
         self._xyz = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
@@ -25,6 +35,10 @@ class OpsNode(Comp.OpsObj):
     def _create(self):
         OpsCommandLogger.info('ops.node({}, *{})'.format(self._uniqNum, self._xyz))
         ops.node(self._uniqNum, *self._xyz)
+    # @Comp.CompMgr()
+    # def _VALCOMPLETE(self, xyz):
+    #     self._xyz = xyz
+    #     return self
 
     @property
     def xyz(self):
@@ -43,11 +57,16 @@ class OpsMass(Comp.OpsObj):
         self._type += '->Ops Mass'
         self._Node = node
         self._mass = float(mass)
-        if len(dof) == 6 and UtilTools.Util.isOnlyHas(dof, [0, 1, -1]):
+        if len(dof) == 6 and UtilTools.Util.isOnlyHas(dof, [0, 1, -1], flatten=True):
             self._massDof = dof
+        else:
+            self._massDof = [1,1,1,0,0,0]
+        
+        self._create()
     
     def _create(self):
         OpsCommandLogger.info('ops.mass({}, {}, {}, {}, {}, {}, {})'.format(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2], self._mass*self._massDof[3], self._mass*self._massDof[4], self._mass*self._massDof[5]))
+
         ops.mass(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2], self._mass*self._massDof[3], self._mass*self._massDof[4], self._mass*self._massDof[5])
 
     @property
@@ -87,6 +106,22 @@ class OpsFix(OpsBoundary):
         OpsCommandLogger.info('ops.fix({}, *{})'.format(self._node.uniqNum, self._fix))
         ops.fix(self._node.uniqNum, *self._fix)
 
+class OpsEqualDOF(Comp.OpsObj):
+    def __init__(self, nodeI:OpsNode, nodeJ:OpsNode, dofs:list[int], name=""):
+        super().__init__(name)
+        self._type += '-> Ops Equal DOF'
+        self._NodeI = nodeI
+        self._NodeJ = nodeJ
+        self._dofs = dofs
+        self._create()
+    
+    def _create(self):
+        OpsCommandLogger.info('ops.equalDOF({}, {}, *{})'.format(self._NodeI.uniqNum, self._NodeJ.uniqNum, self._dofs))
+        ops.equalDOF(self._NodeI.uniqNum, self._NodeJ.uniqNum, *self._dofs)
+    
+    @property
+    def val(self):
+        return [self._NodeI, self._NodeJ, self._dofs]
 class OpsGemoTrans(Comp.OpsObj):
     @abstractmethod
     def __init__(self, vecz:tuple[float], name=""):
@@ -135,16 +170,172 @@ class OpsMaterial(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, name=""):
         super(OpsMaterial, self).__init__(name)
-        self._type += "->Material"
+        self._type += "->Ops Material"
 
     @abstractmethod
     def _create(self):
         ...
+class OpsNDMaterial(OpsMaterial, metaclass=ABCMeta):
+    @abstractmethod
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += '->Ops nDMateial'
+    
+    @abstractmethod
+    def _create(self):
+        ...
+class OpsPIMYMaterial(OpsNDMaterial):
+    @Comp.CompMgr()
+    def __init__(self, nd, rho, refShearModul, refBulkModul, cohesi, peakShearStra,  name=""):
+        super().__init__(name)
+        self._type += 'Pressure Indecent Multi Yield (clay) Material'
+        self._nd = nd
+        self._rho = rho
+        self._refShearModul = refShearModul
+        self._refBulkModul = refBulkModul
+        self._cohesi = cohesi
+        self._peakShearStra = peakShearStra 
 
-class OpsConcrete02(OpsMaterial):
+    def _create(self):
+        ops.nDMaterial('PressureIndependMultiYield', self._uniqNum, self._nd, self._rho, self._refShearModul, self._refBulkModul, self._cohesi, self._peakShearStra)
+        OpsCommandLogger.info('ops.nDMaterial("PressureIndependMultiYield", {}, {}, {}, {}, {}, {}, {})'.format(self._uniqNum, self._nd, self._rho, self._refShearModul, self._refBulkModul, self._cohesi, self._peakShearStra))
+
+    @property
+    def val(self):
+        return [self._nd, self._rho, self._refShearModul, self._refBulkModul, self._cohesi, self._peakShearStra]
+
+class OpsClayMaterial(OpsPIMYMaterial):
+    def __init__(self, nd, rho, refShearModul, refBulkModul, cohesi, peakShearStra, name=""):
+        super().__init__(nd, rho, refShearModul, refBulkModul, cohesi, peakShearStra, name)
+    def _create(self):
+        return super()._create()
+
+    @property
+    def val(self):
+        return super().val
+
+class OpsPDMYMaterial(OpsNDMaterial):
+    @Comp.CompMgr()
+    def __init__(self, nd, rho, refShearModul, refBulkModul, frictionAng, peakShearStra, refPress, pressDependCoe, PTAng, contrac, dilat, liquefac, name=""):
+        super().__init__(name)
+        self._type += 'Pressure Depend Multi Yield (sand) Material'
+        self._nd = nd
+        self._rho = rho
+        self._refShearModul = refShearModul
+        self._refBulkModul = refBulkModul
+        self._frictionAng = frictionAng
+        self._peakShearStra = peakShearStra
+        self._refPress = refPress
+        self._pressDependCoe = pressDependCoe
+        self._PTAng = PTAng
+        self._contrac = contrac
+        self._dilat = dilat
+        self._liquefac = liquefac
+
+    def _create(self):
+        ops.nDMaterial('PressureDependMultiYield', self._uniqNum, self._nd, self._rho, self._refShearModul, self._refBulkModul, self._frictionAng, self._peakShearStra, self._refPress, self._pressDependCoe, self._PTAng, self._contrac, *self._dilat, *self._liquefac)
+
+    @property
+    def val(self):
+        return [self._nd, self._rho, self._refBulkModul, self._refShearModul, self._frictionAng, self._peakShearStra, self._refPress, self._pressDependCoe, self._PTAng, self._contrac, self._dilat, self._liquefac]
+
+class OpsSandMaterial(OpsPDMYMaterial):
+    def __init__(self, nd, rho, refShearModul, refBulkModul, frictionAng, peakShearStra, refPress, pressDependCoe, PTAng, contrac, dilat, liquefac, name=""):
+        super().__init__(nd, rho, refShearModul, refBulkModul, frictionAng, peakShearStra, refPress, pressDependCoe, PTAng, contrac, dilat, liquefac, name)
+    
+    def _create(self):
+        return super()._create()
+
+    @property
+    def val(self):
+        return super().val
+
+class OpsUniaxialMaterial(OpsMaterial, metaclass=ABCMeta):
+    @abstractmethod
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += 'Ops uniaxial Material'
+    
+    @abstractmethod
+    def _create(self):
+        ...
+
+    @property
+    def val(self):
+        ...
+
+class OpsPySimpleMaterial(OpsUniaxialMaterial):
+    @Comp.CompMgr()
+    def __init__(self, pult:float, Y50:float, Cd:float, soilType:int=2, name=''):
+        super().__init__(name)
+        self._type += 'Ops P-y Material'
+        self._pult = pult
+        self._y50 = Y50
+        self._cd = Cd
+        self._soilType = soilType
+
+    def _create(self):
+        ops.uniaxialMaterial('PySimple1', self._uniqNum, self._soilType, self._pult, self._y50, self._cd, c=0.0)
+
+        OpsCommandLogger.info('ops.uniaxialMaterial("PySimple1", {}, {}, {}, {}, {}, c=0.0)'.format(self._uniqNum, self._soilType, self._pult, self._y50, self._cd))
+
+    @property
+    def val(self):
+        return [self._pult, self._y50, self._cd, self._soilType]
+
+class OpsTzSimpleMaterial(OpsUniaxialMaterial):
+    @Comp.CompMgr()
+    def __init__(self, tult:float, Z50:float, soilType:int=2, name=''):
+        super().__init__(name)
+        self._type += 'Ops P-y Material'
+        self._tult = tult
+        self._z50 = Z50
+        self._soilType = soilType
+
+    def _create(self):
+        ops.uniaxialMaterial('TzSimple1', self._uniqNum, self._soilType, self._tult, self._z50, c=0.0)
+        OpsCommandLogger.info('ops.uniaxialMaterial("PySimple1", {}, {}, {}, {}, c=0.0)'.format(self._uniqNum, self._soilType, self._tult, self._z50))
+
+    @property
+    def val(self):
+        return [self._tult, self._z50, self._soilType]
+
+class OpsQzSimpleMaterial(OpsUniaxialMaterial):
+    @Comp.CompMgr()
+    def __init__(self, qult:float, q50:float, SoilType:int=2, name=''):
+        super().__init__(name)
+        self._type += 'Ops P-y Material'
+        self._qult = qult
+        self._z50 = q50
+        self._qzType = SoilType
+
+    def _create(self):
+        ops.uniaxialMaterial('QzSimple1', self._uniqNum, self._qzType, self._qult, self._z50, suction=0.0, c=0.0)
+        OpsCommandLogger.info('ops.uniaxialMaterial("PySimple1", {}, {}, {}, {}, suction=0.0, c=0.0)'.format(self._uniqNum, self._qzType, self._qult, self._z50))
+
+    @property
+    def val(self):
+        return [self._qult, self._z50, self._qzType]
+class OpsElasticPPMaterial(OpsUniaxialMaterial):
+    @Comp.CompMgr()
+    def __init__(self, E, epsT, name=""):
+        super().__init__(name)
+        self._type += 'Elastic-Perfectly Plastic Material'
+        self._E = E
+        self._epsT = epsT
+    
+    def _create(self):
+        ops.uniaxialMaterial('ElasticPP', self._uniqNum, self._E, self._epsT)
+        OpsCommandLogger.info('ops.uniaxialMaterial("ElasticPP", {}, {}, {})'.format(self._uniqNum, self._E, self._epsT))
+    
+    @property
+    def val(self):
+        return [self._E, self._epsT]
+        
+class OpsConcrete02(OpsUniaxialMaterial):
     """
     使用Ops的Concrete02模型
-    uniaxialMaterial('Concrete02', matTag, fpc, epsc0, fpcu, epsU, lambda, ft, Ets)
+    uniaxialMaterial('Concrete02', matTag, fpc, epsc0, fpcu, epsU, lambda, ftype(x) == Componenttype(x) == Componentt, Ets)
     fpc:28天抗压强度
     epsc0:混凝土最大应变
     fpcu:混凝土极限抗压强度
@@ -186,7 +377,7 @@ class OpsConcrete02(OpsMaterial):
         OpsCommandLogger.info('ops.uniaxialMaterial("Concrete02", {}, {}, {}, {}, {}, {}, {}, {})'.format(self._uniqNum, self._fpc, self._epsc0, self._fpcu, self._epsu, self._lambda, self._ft, self._ets))
         ops.uniaxialMaterial( "Concrete02", self._uniqNum, self._fpc, self._epsc0, self._fpcu, self._epsu, self._lambda, self._ft, self._ets)
 
-class OpsSteel02(OpsMaterial):
+class OpsSteel02(OpsUniaxialMaterial):
     """
     采用openseespy中的steel02材料模型
     uniaxialMaterial('Steel02', matTag, Fy, E0, b, *params, a1=a2*Fy/E0, a2=1.0, a3=a4*Fy/E0, a4=1.0, sigInit=0.0)
@@ -230,7 +421,7 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         ...
 
     @staticmethod
-    def RectRebarFiber(p1: tuple, p2: tuple, m: OpsMaterial, area: GlobalData.ReBarArea, n: int):
+    def RectRebarFiber(p1: tuple, p2: tuple, m:OpsUniaxialMaterial, area: GlobalData.ReBarArea, n: int):
         if n == 1:
             return
         np1 = np.array(p1)
@@ -243,13 +434,13 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         ops.layer( "straight", m.uniqNum, n, area.value, float(np1[0]), float(np1[1]), np2[0], np2[1])
 
     @staticmethod
-    def RoundRebarFiberBuild(r:float, m:OpsMaterial, area:GlobalData.ReBarArea, n:int):
+    def RoundRebarFiberBuild(r:float, m:OpsUniaxialMaterial, area:GlobalData.ReBarArea, n:int):
         ops.layer("circ", m.uniqNum, n, area.value, 0, 0, r)
         message = 'ops.layer("circ", {}, {}, {}, 0, 0, {})'.format(m.uniqNum, n, area.value, r)
         OpsCommandLogger.info(message)
 
     @staticmethod
-    def HRectConcreteFiberBuild(w:float, l:float, t:float, m: OpsMaterial, fibersize:tuple[int, ...]):
+    def HRectConcreteFiberBuild(w:float, l:float, t:float, m:OpsUniaxialMaterial, fibersize:tuple[int, ...]):
         
         # patch('rect', matTag, numSubdivY, numSubdivZ, *crdsI, *crdsJ)
         p1 = (w / 2, l / 2)
@@ -282,7 +473,7 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         OpsCommandLogger.info(message)
 
     @staticmethod
-    def RoundConcreteFiberBuild(Rin:float, Rout:float, m:OpsMaterial, fiberSize:tuple[int, ...]):
+    def RoundConcreteFiberBuild(Rin:float, Rout:float, m:OpsUniaxialMaterial, fiberSize:tuple[int, ...]):
         # patch('circ', matTag, numSubdivCirc, numSubdivRad, *center, *rad, *ang)
         Circ, Rad = fiberSize
         nRad = int(round((Rout-Rin)/Circ, 0))
@@ -525,9 +716,21 @@ class OpsHRectFiberSection(OpsSection):
 
 class OpsElement(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += '->Ops Element'
+
+    @abstractmethod
+    def _create(self):...
+    
+    @property
+    def val(self):...
+
+class OpsLineElement(OpsElement, metaclass=ABCMeta):
+    @abstractmethod
     def __init__(self, node1:OpsNode, node2:OpsNode, sect:OpsSection, transf:OpsLinearTrans, name=""):
-        super(OpsElement, self).__init__(name)
-        self._type += "->OpsElement"
+        super(OpsLineElement, self).__init__(name)
+        self._type += "->Ops Line Element"
         self._Node1 = node1
         self._Node2 = node2
         self._Sect = sect
@@ -546,10 +749,10 @@ class OpsElement(Comp.OpsObj, metaclass=ABCMeta):
     def _create(self):
         ...
 
-class OpsZLElement(OpsElement):
+class OpsZLElement(OpsLineElement):
     __slots__ = []
     @Comp.CompMgr()
-    def __init__(self, node1:OpsNode, node2:OpsNode, mats:list[OpsMaterial], dirs:list[int], name=""):
+    def __init__(self, node1:OpsNode, node2:OpsNode, mats:list[OpsUniaxialMaterial], dirs:list[int], name=""):
         super().__init__(node1, node2, None, None, name)
 
         self._type += '->Zero Length Element'
@@ -567,7 +770,7 @@ class OpsZLElement(OpsElement):
         return [self._Node1, self._Node2, self._m, self._dirs]
 
     def _create(self):
-        OpsCommandLogger.info('ops.element(\'{}\', {}, {}, {}, \'{}\', *{}, \'{}\', *{})'.format('zeroLength', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, '-mat', *self._m, '-dir', *self._dirs))
+        OpsCommandLogger.info('ops.element(\'{}\', {}, {}, {}, \'{}\', *{}, \'{}\', *{})'.format('zeroLength', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, '-mat', self._m, '-dir', self._dirs))
         ops.element('zeroLength', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, '-mat', *self._m, '-dir', *self._dirs)
 
     @property
@@ -577,7 +780,7 @@ class OpsZLElement(OpsElement):
     def NodeJ(self):
         return self._Node2
 
-class OpsEBCElement(OpsElement):
+class OpsEBCElement(OpsLineElement):
     """
     ElasticBeamColumn单元,使用的opensees.py命令为:
     element('elasticBeamColumn', eleTag, *eleNodes, secTag, transfTag, <'-mass', mass>, <'-cMass'>)
@@ -612,7 +815,7 @@ class OpsEBCElement(OpsElement):
         OpsCommandLogger.info('ops.element({}, {}, {}, {}, {}, {})'.format("elasticBeamColumn", self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._Sect.uniqNum, self._Transf.uniqNum))
         ops.element("elasticBeamColumn", self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._Sect.uniqNum, self._Transf.uniqNum)
 
-class OpsNBCElement(OpsElement):
+class OpsNBCElement(OpsLineElement):
     __slots__ = []
     @Comp.CompMgr()
     def __init__(self, node1:OpsNode, node2:OpsNode, sect:OpsBoxSection, localZ:tuple[int],IntgrNum:int=5, maxIter=10, tol:float=1e-12, mass:float=0.0, IntgrType:str="Lobatto", name=""):
@@ -646,9 +849,48 @@ class OpsNBCElement(OpsElement):
         # element('nonlinearBeamColumn', eleTag, *eleNodes, numIntgrPts, 
         # secTag, transfTag, '-iter', maxIter=10, tol=1e-12, '-mass', mass=0.0, 
         # '-integration', intType)
-        OpsCommandLogger.info('ops.element("nonlinearBeamColumn", {}, {}, {}, {}, {}, {}, "-iter", {}, {}, "-mass", {}, "-itegration", \'{}\')'.format(self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._intgrN, self._Sect.uniqNum, self._Transf.uniqNum, self._maxIter, self._tol,  self._mass,self._intgrType))
         ops.element('nonlinearBeamColumn', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._intgrN, self._Sect.uniqNum, self._Transf.uniqNum, '-iter', self._maxIter, self._tol, '-mass', self._mass, '-itegration', self._intgrType)
 
+        OpsCommandLogger.info('ops.element("nonlinearBeamColumn", {}, {}, {}, {}, {}, {}, "-iter", {}, {}, "-mass", {}, "-itegration", \'{}\')'.format(self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._intgrN, self._Sect.uniqNum, self._Transf.uniqNum, self._maxIter, self._tol,  self._mass,self._intgrType))
+
+# class OpsPlaneElement(OpsElement):
+#     def __init__(self, node1: OpsNode, node2: OpsNode, sect: OpsSection, transf: OpsLinearTrans, name=""):
+#         super().__init__(node1, node2, sect, transf, name)
+class OpsBrickElement(OpsElement, metaclass=ABCMeta):
+    @abstractmethod
+    def __init__(self, node1:OpsNode,  node2:OpsNode, node3:OpsNode, node4:OpsNode, node5:OpsNode,node6:OpsNode, node7:OpsNode, node8:OpsNode, name=""):
+        super().__init__(name)
+        self._node1 = node1
+        self._node2 = node2
+        self._node3 = node3
+        self._node4 = node4
+        self._node5 = node5
+        self._node6 = node6
+        self._node7 = node7
+        self._node8 = node8
+    
+    @abstractmethod
+    def _create(self):
+        ...
+    
+    @property
+    def val(self): ...
+
+class OpsStanderBrickElement(OpsBrickElement):
+    @Comp.CompMgr()
+    def __init__(self, node1: OpsNode, node2: OpsNode, node3: OpsNode, node4: OpsNode, node5: OpsNode, node6: OpsNode, node7: OpsNode, node8: OpsNode, material:OpsSandMaterial, name=""):
+        super().__init__(node1, node2, node3, node4, node5, node6, node7, node8, name)
+        self._material = material
+        self._eleNodes = [self._node1.uniqNum, self._node2.uniqNum, self._node3.uniqNum, self._node4.uniqNum, self._node5.uniqNum, self._node6.uniqNum, self._node7.uniqNum, self._node8.uniqNum]
+    
+    def _create(self):
+        ops.element('stdBrick', self._uniqNum, *self._eleNodes, self._material.uniqNum)
+        OpsCommandLogger.info('ops.element("stdBrick", {}, *{}, {})'.format(self._uniqNum, self._eleNodes, self._material.uniqNum))
+    
+    @property
+    def val(self):
+        return [self._eleNodes, self._material]
+       
 class OpsTimeSeries(Comp.OpsObj):
     @abstractmethod
     def __init__(self, name=""):
@@ -686,13 +928,13 @@ class OpsPathTimeSerise(OpsTimeSeries):
     def __init__(self, times:list[float], values:list[float], name=""):
         super().__init__(name)
         self._type += '->OpsPathTimeSerise'
-        self._times = times
-        self._values = values
+        self._times = np.array(times).tolist()
+        self._values = np.array(values).flatten().tolist()
     
     def _create(self):
-        OpsCommandLogger.info('ops.timeSeries({}, {}, {}, *{}, {}, *{})'.format('Path', self._uniqNum, '-values', *self._values, '-time', *self._times))
+        OpsCommandLogger.info('ops.timeSeries(\'{}\', {}, \'{}\', *{}, \'{}\', *{})'.format('Path', self._uniqNum, '-values', self._values, '-time', self._times))
     # timeSeries('Path', tag, '-dt', dt=0.0, '-values', *values, '-time', *time, '-filePath', filePath='', '-fileTime', fileTime='', '-factor', factor=1.0, '-startTime', startTime=0.0, '-useLast', '-prependZero')
-        ops.timeSeries('Path', self._uniqNum, '-values', *self._values, '-time', *self._times)
+        ops.timeSeries('Path', self._uniqNum, '-time', *self._times, '-values', *self._values)
     
     @property
     def val(self):
@@ -767,7 +1009,7 @@ class OpsNodeLoad(OpsPlainLoads):
 
 class OpsEleLoad(OpsPlainLoads):
     # @Comp.CompMgr()
-    def __init__(self, eles:list[OpsElement], wx:float=0.0, wy:float=0.0, wz:float=0.0, name=""):
+    def __init__(self, eles:list[OpsLineElement], wx:float=0.0, wy:float=0.0, wz:float=0.0, name=""):
         super().__init__(name)
         self._type += '->OpsElementLoad'
         self._Elements = eles
@@ -822,18 +1064,18 @@ class OpsPlainGroundMotion(Comp.OpsObj):
         args =[]
 
         if self._disp:
-            args.append('-disp', self._disp.uniqNum)
+            args += ['-disp', self._disp.uniqNum]
         if self._vel:
-            args.append('-vel', self._vel.uniqNum)
+            args += ['-vel', self._vel.uniqNum]
         if self._acc:
-            args.append('-accel', self._acc.uniqNum)
+            args += ['-accel', self._acc.uniqNum]
 
         return args
 
 
     def _create(self):
         # groundMotion(gmTag, 'Plain', '-disp', dispSeriesTag, '-vel', velSeriesTag, '-accel', accelSeriesTag, '-int', tsInt='Trapezoidal', '-fact', factor=1.0)
-        OpsCommandLogger.info('ops.groundMotion({}, {}, *{}, {}, {})'.format(self._uniqNum, 'Plain', *self._args(), '-fact', self._factor))
+        OpsCommandLogger.info('ops.groundMotion({}, \'{}\', *{}, \'{}\', {})'.format(self._uniqNum, 'Plain', self._args(), '-fact', self._factor))
         ops.groundMotion(self._uniqNum, 'Plain', *self._args(), '-fact', self._factor)
     
     @property

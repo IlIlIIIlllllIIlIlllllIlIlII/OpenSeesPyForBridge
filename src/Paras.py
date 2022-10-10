@@ -1,5 +1,9 @@
+from dataclasses import dataclass
+from dbm import ndbm
 from enum import Enum
 from abc import ABCMeta, abstractmethod
+from importlib.machinery import SourceFileLoader
+from sys import float_info
 
 from .Comp import Paras
 from . import GlobalData
@@ -505,6 +509,49 @@ class SteelParas(MaterialParas):
         """
         return [self._fy, self._E0, self._b, self._R0, self._R1, self._R2]
 
+# class ClayParas(Paras):
+#     def __init__(self, clayType:str, nd, rho, refShearModul, refBulkModul, cohesi, peakShearStra, name=""):
+#         super().__init__(name)
+#         self._nd = nd
+class SoilParas(Paras):
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += 'SoilParas'
+
+@dataclass
+class SandParas(SoilParas):
+    sandType:str
+    nd:int
+    rho:float 
+    refShearModul:float 
+    refBulkModul:float 
+    frictionAng:float 
+    peakShearStra:float
+    refPress:float
+    pressDependCoe:float 
+    PTAng:float 
+    contrac:float 
+    dilat:float 
+    liquefac:float 
+    
+    @property
+    def val(self):
+        return [self.nd, self.rho, self.refShearModul, self.refBulkModul, self.frictionAng, self.peakShearStra, self.refPress, self.pressDependCoe, self.PTAng, self.contrac, self.dilat, self.liquefac]
+
+@dataclass
+class ClayParas:
+    clayType:str
+    nd:int
+    rho:float
+    refShearModul:float
+    refBulkModul:float
+    cohesi:float
+    peakShearStra:str
+    
+    @property
+    def val(self):
+        return [self.nd, self.rho, self.refShearModul, self.refBulkModul, self.cohesi, self.peakShearStra]
+
 class Concrete:
     @classmethod
     @property
@@ -556,6 +603,44 @@ class ReBar:
     @property
     def HRBF400(cls):
         return SteelParas(rebarType="HRBF400", **GlobalData.MaterialDataBase.Rebar(GlobalData.ReBarType.HRBF400))
+
+class Clay:
+    @classmethod
+    @property
+    def Soft(cls):
+        return ClayParas(clayType='SoftClay', **GlobalData.MaterialDataBase.Clay(GlobalData.ClayType.SoftClay))
+
+    @classmethod
+    @property
+    def Medium(cls):
+        return ClayParas(clayType='MediumClay', **GlobalData.MaterialDataBase.Clay(GlobalData.ClayType.MediumClay))
+
+    @classmethod
+    @property
+    def Stiff(cls):
+        return ClayParas(clayType='StiffClay', **GlobalData.MaterialDataBase.Clay(GlobalData.ClayType.StiffClay))
+
+class Sand:
+    @classmethod
+    @property
+    def LooseSand(cls):
+        return SandParas(sandType='LooseSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.LooseSand))
+
+    @classmethod
+    @property
+    def MediumSand(cls):
+        return SandParas(sandType='MediumSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.MediumSand))
+
+    @classmethod
+    @property
+    def MediumDenseSand(cls):
+        return SandParas(sandType='MediumDenseSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.MediumDenseSand))
+
+    @classmethod
+    @property
+    def DenseSand(cls):
+        return SandParas(sandType='DenseSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.DenseSand))
+
 #TODO
 class BridgeParas(Paras):
     def __init__(self, name: str = ""):

@@ -1,3 +1,4 @@
+from enum import Enum
 import numpy as np
 import openseespy.opensees as ops
 from abc import ABCMeta, abstractmethod
@@ -13,7 +14,8 @@ class Component(metaclass=ABCMeta):
         self._type = "component"
         self._uniqNum = None
         self._name = name
-    
+        # self._argsHash = -1
+        # self._kwargsHash = -1
     def __eq__(self, __o) -> bool:
         if type(self) == type(__o) and self.val == __o.val:
             return True
@@ -25,6 +27,11 @@ class Component(metaclass=ABCMeta):
     #     for name, val in vars(self).items():
     #        dic += "{}:{}\n".format(name, val)
     #     return dic
+
+    def __hash__(self) -> int:
+        return hash(repr(self))
+
+
 
     @property
     def val(self):
@@ -83,7 +90,7 @@ class CompMgr:
     def CompareCompVal(val1, val2):
         flag = True
         for x, y in zip(val1, val2):
-            if type(x) == np.ndarray:
+            if isinstance(x, np.ndarray):
                 flag = np.all(x==y)
             else:
                 flag = (x == y)

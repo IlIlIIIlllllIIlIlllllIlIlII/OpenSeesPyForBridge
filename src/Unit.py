@@ -27,12 +27,12 @@ UserTimeUnit = BasicUnitTime.s
 
 # @classmethod
 # def CoverToSysUnitDec(cls, func):
-#     def wapper(*args, **kwargs):
+#     def wrapper (*args, **kwargs):
 #         x = func(*args, **kwargs)
 
 #         return x
 
-#     return wapper
+#     return wrapper
 
 # @staticmethod
 def ConvertToBaseUnit(value:float, unit:str):
@@ -40,6 +40,7 @@ def ConvertToBaseUnit(value:float, unit:str):
 
     # * Pressure Pa
     unit = re.sub(r'\b(mpa|MPA|mPa|mPA|Mpa|MPa)\b', '1000000*N/m/m', unit)
+    unit = re.sub(r'\b(kpa|KPA|kPa|kPA|Kpa|KPa)\b', '1000*N/m/m', unit)
     unit = re.sub(r'\b(pa|PA|Pa)\b', 'N/m/m', unit)
 
     # * Force N

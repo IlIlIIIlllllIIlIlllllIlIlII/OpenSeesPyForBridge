@@ -1,16 +1,9 @@
-from enum import Enum
-import imp
-from symbol import factor
-from sys import flags
 import numpy as np
-import math
 from scipy.spatial.transform import Rotation as R
-import re
 
 from .Comp import Paras
 from .GlobalData import DEFVAL, ReBarArea, ReBarType
 from .Paras import HRectSectParas, HRoundSectParas, SRoundSectParas
-from src import Comp
 #%%
     
 
@@ -52,6 +45,19 @@ class PointsTools:
         if type(p2) is not np.ndarray:
             p2 = np.array(p2)
         return float(np.sqrt(np.sum((p1 - p2) ** 2)))
+    
+    @staticmethod
+    def Point2LineDist(p1, lp1, lp2):
+        pl = PointsTools.VectorSub(p1, lp1)
+        if Util.isOnlyHas(pl, [0], flatten=True):
+            return 0
+        l = PointsTools.VectorSub(lp2, lp1)
+        ang = PointsTools.VectorAngle(pl, l)
+        n_pl = PointsTools.NormOfVector(pl)
+
+        dist = np.sin(ang) * n_pl
+
+        return dist
 
     @staticmethod
     def LinePointBuilder(p1:tuple[int, ...], p2:tuple[int, ...], intervalList:list[int]):
@@ -62,7 +68,8 @@ class PointsTools:
         dy = p1[1] - p2[1]
         dz = p1[2] - p2[2]
         pointsList = [p1]
-        if Util.TOLEQ(PointsTools.PointsDist(p1, p2), sum(intervalList)):
+        Dist = PointsTools.PointsDist(p1, p2)
+        if Util.TOL_EQ(Dist, sum(intervalList)):
             rate = [sum(intervalList[:i+1])/sum(intervalList) for i,_ in enumerate(intervalList)]
             temp = 0
 
@@ -70,18 +77,33 @@ class PointsTools:
                 temp = (p1[0] - dx * r, p1[1] - dy * r, p1[2] - dz * r)
                 pointsList.append(temp)
         else:
-            raise Exception("wrong paras")
+            raise Exception("wrong paras, Point {}, Point{} distance {} is not equal sum {} of intervallist".format(p1, p2, Dist, sum(intervalList)))
         return pointsList
     @staticmethod
-    def isInLine(p:tuple[float], lp1:tuple[float], lp2:tuple[float], ExtendLine=False):
-        v1 = PointsTools.vectSub(p, lp1)
-        v2 = PointsTools.vectSub(p, lp2)
-        n1 = PointsTools.NormOfvect(v1)
-        n2 = PointsTools.NormOfvect(v2)
-        if Util.TOLEQ(n1, 0) or Util.TOLEQ(n2, 0):
+    def IsLinesParallel(lpi, lpj, lp1, lp2):
+        dist_i = PointsTools.Point2LineDist(lpi, lp1, lp2)
+        dist_j = PointsTools.Point2LineDist(lpj, lp1, lp2)
+
+        if Util.TOL_EQ(dist_i, dist_j):
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def IsPointInLine(p:tuple[float], lp1:tuple[float], lp2:tuple[float], ExtendLine=False):
+        v1 = PointsTools.VectorSub(p, lp1)
+        v2 = PointsTools.VectorSub(p, lp2)
+        n1 = PointsTools.NormOfVector(v1)
+        n2 = PointsTools.NormOfVector(v2)
+        if Util.TOL_EQ(n1, 0) or Util.TOL_EQ(n2, 0):
             return True
 
-        if Util.TOLEQ(v1[0]/v2[0], v1[1]/v2[1]) and Util.TOLEQ(v1[0]/v2[0], v1[2]/v2[2]):
+        if PointsTools.IsLinesParallel(p, lp1, p, lp2):
+            return True
+        else:
+            return False
+
+        if Util.TOL_EQ(v1[0]/v2[0], v1[1]/v2[1]) and Util.TOL_EQ(v1[0]/v2[0], v1[2]/v2[2]):
             if not ExtendLine:
                 if v1[0]/v2[0] < 0:
                     return True
@@ -106,7 +128,7 @@ class PointsTools:
         return x + y
 
     @staticmethod
-    def vectSub(x:tuple[float], y):
+    def VectorSub(x:tuple[float], y):
         """
         向量减法
         """
@@ -148,7 +170,7 @@ class PointsTools:
             return x//y
 
     @staticmethod
-    def NormOfvect(x:tuple[float,...]) -> float:
+    def NormOfVector(x:tuple[float,...]) -> float:
         """
         向量的模
         """
@@ -157,13 +179,13 @@ class PointsTools:
         return PointsTools.PointsDist(x, (0, 0, 0))
 
     @staticmethod
-    def vectAngle(x:tuple[float], y:tuple[float]) -> float:
+    def VectorAngle(x:tuple[float], y:tuple[float]) -> float:
         """
         向量的夹角
         """
         if PointsTools.IsVectsLegal(x) and PointsTools.IsVectsLegal(y):
-            xnorm = PointsTools.NormOfvect(x)
-            ynorm = PointsTools.NormOfvect(y)
+            xnorm = PointsTools.NormOfVector(x)
+            ynorm = PointsTools.NormOfVector(y)
             cos = (x[0] * y[0] + x[1] * y[1] + x[2] * y[2]) / ynorm / xnorm
 
             return np.arccos(cos)
@@ -177,7 +199,7 @@ class PointsTools:
         """
         if type(x) is not np.ndarray:
             x = np.array(x)
-        norm = PointsTools.NormOfvect(x)
+        norm = PointsTools.NormOfVector(x)
 
         return x/norm
     
@@ -210,7 +232,7 @@ class PointsTools:
 
         normalVect = PointsTools.NormalVectOfPlane(planeVect1, planeVect2)
 
-        theta = PointsTools.vectAngle(vect, normalVect)
+        theta = PointsTools.VectorAngle(vect, normalVect)
 
         return np.pi/2-theta
     
@@ -235,15 +257,15 @@ class PointsTools:
             return True
 
     @staticmethod
-    def IsVectInPlane(vect:np.ndarray, planeVect1:np.ndarray, planeVect2:np.ndarray) -> bool:
+    def IsVectorInPlane(vect:np.ndarray, planeVect1:np.ndarray, planeVect2:np.ndarray) -> bool:
         """
         向量是否在平面中
         """
         
         normalVect = PointsTools.NormalVectOfPlane(planeVect1, planeVect2)
 
-        cos = PointsTools.vectAngle(vect, normalVect)
-        if Util.TOLEQ(cos, 1):
+        ang = PointsTools.VectorAngle(vect, normalVect)
+        if Util.TOL_EQ(np.cos(ang), 0):
             return True
         else:
             return False
@@ -260,7 +282,7 @@ class PointsTools:
         if type(planeVect2) is not np.ndarray:
             planeVect2 = np.array(planeVect2)
         n = PointsTools.NormalVectOfPlane(planeVect1, planeVect2)
-        norm = PointsTools.NormOfvect(n)
+        norm = PointsTools.NormOfVector(n)
         a = n * vect / norm ** 2
         return vect - (a * n)
 
@@ -301,7 +323,7 @@ class PointsTools:
         if type(Points) is not np.ndarray:
             Points = np.array(Points)
             
-        theta = PointsTools.vectAngle(source , target) / 2      
+        theta = PointsTools.VectorAngle(source , target) / 2      
         NormalAXis = np.cross(source, target)
         NormalAXis = PointsTools.vectNormalize(NormalAXis)
 
@@ -342,12 +364,12 @@ class PointsTools:
         new_ZAxis = np.cross(new_XAxis, new_YAxis)
 
         
-        theta_x = PointsTools.vectAngle(vect, new_XAxis)
-        vect_x = PointsTools.NormOfvect(vect) * np.cos(theta_x)
-        theta_y = PointsTools.vectAngle(vect, new_YAxis)
-        vect_y = PointsTools.NormOfvect(vect) * np.cos(theta_y)
-        theta_z = PointsTools.vectAngle(vect, new_ZAxis)
-        vect_z = PointsTools.NormOfvect(vect) * np.cos(theta_z)
+        theta_x = PointsTools.VectorAngle(vect, new_XAxis)
+        vect_x = PointsTools.NormOfVector(vect) * np.cos(theta_x)
+        theta_y = PointsTools.VectorAngle(vect, new_YAxis)
+        vect_y = PointsTools.NormOfVector(vect) * np.cos(theta_y)
+        theta_z = PointsTools.VectorAngle(vect, new_ZAxis)
+        vect_z = PointsTools.NormOfVector(vect) * np.cos(theta_z)
 
         return np.array([vect_x, vect_y, vect_z])
 
@@ -396,7 +418,7 @@ class PointsTools:
 
 class Util:
     @staticmethod
-    def TOLEQ(n1, n2):
+    def TOL_EQ(n1, n2):
         try:
             n1 = float(n1)
             n2 = float(n2)
@@ -434,14 +456,14 @@ class Util:
             return False
         
     @staticmethod
-    def TOLLE(n1, n2):
+    def TOL_LE(n1, n2):
         if not Util.TOLGT(n1, n2):
             return True
         else:
             return False
 
     @staticmethod
-    def TOLGE(n1, n2):
+    def TOL_GE(n1, n2):
         if not Util.TOLLT(n1, n2):
             return True
         else:
@@ -522,7 +544,7 @@ class SegmentTools:
         num = int(totalLen/setLen)
         rem = totalLen - setLen * num
 
-        if Util.TOLEQ(rem, 0):
+        if Util.TOL_EQ(rem, 0):
             eleLenList = num * [setLen]
         else:
             eleLenList = num * [setLen] + [rem]
@@ -544,7 +566,7 @@ class SegmentTools:
             power = float(power)
         except:
             raise Exception("Wrong paras")
-        if Util.TOLEQ(sum(intervalList), l):
+        if Util.TOL_EQ(sum(intervalList), l):
             b = paraI
             a = (paraJ-paraI) / (l**power)
             paraList = [paraI]
@@ -639,7 +661,7 @@ class BarsTools:
 
             return (Rat_, Ns_, As_)
 
-        elif Util.TOLEQ(Rat_max, r):
+        elif Util.TOL_EQ(Rat_max, r):
             Ns_ = [Ns_max]
             As_ = [[As_max] * len(Ns_max)]
             Rat_ = [Rat_max]
@@ -782,7 +804,7 @@ class BarsTools:
     @staticmethod
     def SRoundRebarDistr(paras:SRoundSectParas, attr:dict, r:float):
         if r - 0.006 < DEFVAL._TOL_ or r - 0.04 > DEFVAL._TOL_:
-            raise Exception("Wrong Re-Bar Ratio")
+            raise Exception("Wrong Re-Bar Ratio:{}".format(r))
         
         c = paras.C
         R = paras.R

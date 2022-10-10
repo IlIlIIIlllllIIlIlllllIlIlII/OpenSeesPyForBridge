@@ -1,4 +1,6 @@
+from configparser import ConverterMapping
 from enum import Enum
+from weakref import ref
 
 from . import Unit
 from .log import *
@@ -21,11 +23,11 @@ class CoordinateSystem:
         print(x)
 class DEFVAL:
 
-    @classmethod
-    @property
+    # @classmethod
+    # @property
     
-    def _LENGTH_UNIT_(cls):
-        return "mm"
+    # def _LENGTH_UNIT_(cls):
+    #     return "mm"
     
     # * 全局容差
     @classmethod
@@ -41,12 +43,16 @@ class DEFVAL:
     @classmethod
     @property
     def _MINVAL_(cls):
-        return -1e10
+        return -DEFVAL._MAXVAL_
+    @classmethod
+    @property
+    def _COOROFFSET_(cls):
+        return Unit.ConvertToBaseUnit(0.01, 'mm')
 
     @classmethod
     @property
     def _G_(cls):
-        return Unit.ConvertToBaseUnit(9.80665, 'm*m/s')
+        return Unit.ConvertToBaseUnit(9.80665, 'm/s/s')
 
     # * 默认钢筋间距
     @classmethod
@@ -111,13 +117,22 @@ class ConcreteType(Enum):
     C50 = "C50"
     C55 = "C55"
 
-
 class ReBarType(Enum):
     HRB400 = "HPB400"
     HRB500 = "HRB500"
     HRBF400 = "HRBF400" 
     HRBF500 = "HRBF500"
 
+class SandType(Enum):
+    LooseSand = 'LooseSand'
+    MediumSand = 'MediumSand'
+    MediumDenseSand = 'MediumDenseSand'
+    DenseSand = 'DenseSand'
+
+class ClayType(Enum):
+    SoftClay = 'SoftClay'
+    MediumClay = 'MediumClay'
+    StiffClay = 'StiffClay'
 
 class MaterialDataBase:
     @classmethod    
@@ -193,3 +208,122 @@ class MaterialDataBase:
                 "dens": dens
             }
 
+    @classmethod
+    def Sand(cls, sandType:SandType):
+        nd = 3
+        rho, refShearModul, refBulkModul, frictionAng, peakShearStra, refPress, pressDependCoe, PTAng, contrac, dilat, liquefac = [0] * 11
+
+        if sandType is SandType.LooseSand:
+            rho = Unit.ConvertToBaseUnit(1.7, 't/m/m/m')
+            refShearModul = Unit.ConvertToBaseUnit(5.5e4, 'kPa')
+            refBulkModul = Unit.ConvertToBaseUnit(1.5e5, 'kpa')
+            frictionAng = 29
+            peakShearStra = 0.1
+            refPress = Unit.ConvertToBaseUnit(80, 'kpa')
+            pressDependCoe = 0.5
+            PTAng = 29
+            contrac = 0.21
+            dilat = [0, 0]
+            liquefac = [
+                Unit.ConvertToBaseUnit(10, 'kpa'),
+                0.02,
+                1
+            ]
+        if sandType is SandType.MediumSand:
+            rho = Unit.ConvertToBaseUnit(1.9, 't/m/m/m')
+            refShearModul = Unit.ConvertToBaseUnit(7.5e4, 'kPa')
+            refBulkModul = Unit.ConvertToBaseUnit(2.0e5, 'kpa')
+            frictionAng = 33
+            peakShearStra = 0.1
+            refPress = Unit.ConvertToBaseUnit(80, 'kpa')
+            pressDependCoe = 0.5
+            PTAng = 27
+            contrac = 0.07
+            dilat = [0.4, 2]
+            liquefac = [
+                Unit.ConvertToBaseUnit(10, 'kpa'),
+                0.01,
+                1
+            ]
+    
+        if sandType is SandType.MediumDenseSand:
+            rho = Unit.ConvertToBaseUnit(2, 't/m/m/m')
+            refShearModul = Unit.ConvertToBaseUnit(1e5, 'kPa')
+            refBulkModul = Unit.ConvertToBaseUnit(3.0e5, 'kpa')
+            frictionAng = 37
+            peakShearStra = 0.1
+            refPress = Unit.ConvertToBaseUnit(80, 'kpa')
+            pressDependCoe = 0.5
+            PTAng = 27
+            contrac = 0.05
+            dilat = [0.6, 3]
+            liquefac = [
+                Unit.ConvertToBaseUnit(5, 'kpa'),
+                0.003,
+                1
+            ]
+
+        if sandType is SandType.DenseSand:
+            rho = Unit.ConvertToBaseUnit(2.1, 't/m/m/m')
+            refShearModul = Unit.ConvertToBaseUnit(1.3e5, 'kPa')
+            refBulkModul = Unit.ConvertToBaseUnit(3.9e5, 'kpa')
+            frictionAng = 40
+            peakShearStra = 0.1
+            refPress = Unit.ConvertToBaseUnit(80, 'kpa')
+            pressDependCoe = 0.5
+            PTAng = 27
+            contrac = 0.03
+            dilat = [0.8, 5]
+            liquefac = [
+                Unit.ConvertToBaseUnit(0, 'kpa'),
+                0.000,
+                0
+            ]
+
+            return {
+                'nd':nd,
+                'rho':rho,
+                'refShearModul':refShearModul,
+                'refBulkModul':refBulkModul,
+                'frictionAng':frictionAng,
+                'peakShearStra':peakShearStra,
+                'refPress':refPress,
+                'pressDependCoe':pressDependCoe,
+                'PTAng':PTAng,
+                'contrac':contrac,
+                'dilat':dilat,
+                'liquefac':liquefac
+            }
+
+    @classmethod
+    def Clay(cls, clayType:ClayType):
+        nd = 3
+        rho, refShearModul, refBulkModul, cohesi, peakShearStra = [0] * 5
+        if clayType is ClayType.SoftClay:
+            rho = Unit.ConvertToBaseUnit(1.3, 't/m/m/m')
+            refShearModul = Unit.ConvertToBaseUnit(1.3e4, 'kpa')
+            refBulkModul = Unit.ConvertToBaseUnit(6.5e4, 'kpa')
+            cohesi = Unit.ConvertToBaseUnit(18, 'kpa')
+            peakShearStra = 0.1
+        if clayType is ClayType.MediumClay:
+            rho = Unit.ConvertToBaseUnit(1.5, 't/m/m/m')
+            refShearModul = Unit.ConvertToBaseUnit(6.0e4, 'kpa')
+            refBulkModul = Unit.ConvertToBaseUnit(3.0e5, 'kpa')
+            cohesi = Unit.ConvertToBaseUnit(37, 'kpa')
+            peakShearStra = 0.1
+        if clayType is ClayType.SoftClay:
+            rho = Unit.ConvertToBaseUnit(1.8, 't/m/m/m')
+            refShearModul = Unit.ConvertToBaseUnit(1.5e5, 'kpa')
+            refBulkModul = Unit.ConvertToBaseUnit(7.5e4, 'kpa')
+            cohesi = Unit.ConvertToBaseUnit(75, 'kpa')
+            peakShearStra = 0.1
+
+        return {
+            'nd':nd,
+            'rho':rho,
+            'refShearModul':refShearModul,
+            'refBulkModul':refBulkModul,
+            'cohesi':cohesi,
+            'peakShearStra':peakShearStra
+
+        }

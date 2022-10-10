@@ -4,6 +4,7 @@ import re
 import numpy as np
 import pathlib
 import openseespy.opensees as ops
+import matplotlib.pyplot as plt
 
 from . import OpsObject
 from . import GlobalData
@@ -42,9 +43,9 @@ class ElementsLoads(StaticLoads):
         self._Elements = ele
 
         newZAxis = self._Elements._localZAxis
-        x = self._Elements._Ni.point
-        y = self._Elements._Nj.point
-        newXAxis = UtilTools.PointsTools.vectSub(y, x)
+        x = self._Elements._BridgeNodeI.point
+        y = self._Elements._BridgeNodeJ.point
+        newXAxis = UtilTools.PointsTools.VectorSub(y, x)
 
         load = (wx, wy, wz)
         if GlobalCoordSys:
@@ -86,7 +87,7 @@ class DispLoad(StaticLoads):
     
     def _OpsLoadBuild(self):
         for i, d in enumerate(self._disp):
-            if not UtilTools.Util.TOLEQ(d, 0):
+            if not UtilTools.Util.TOL_EQ(d, 0):
                 OpsObject.OpsSP(self._node.OpsNode, i+1, d)
 
     @property
@@ -116,7 +117,11 @@ class SeismicWave(Comp.Component):
     def __init__(self, dt, accX:list[float]=[], factorX:float=1, accY:list[float]=[], factorY:float=1, accZ:list[float]=[], factorZ:float=1, accInformation:WaveInformation=None, name="") -> None:
         super().__init__(name)
         self._information = accInformation
-        maxlen = max(len(accX), len(accY), len(accZ))
+        accX:np.ndarray = np.array(accX).reshape(1,-1)
+        accY:np.ndarray = np.array(accY).reshape(1,-1)
+        accZ:np.ndarray = np.array(accZ).reshape(1,-1)
+
+        maxlen = max(accX.shape[1], accY.shape[1], accZ.shape[1])
 
         if maxlen == 0:
             message = 'accX, accY, accZ can not be 0 at same time'
@@ -126,17 +131,19 @@ class SeismicWave(Comp.Component):
         message = "Param: {} is ignored as its length are less than maxinum, {} is also ingnored"
         self._factors= [factorX, factorY, factorZ]
 
-        if maxlen == len(accX):
+        if maxlen == accX.shape[1]:
             self._accX = accX
         else:
             StandardLogger.warning(message.format('accX', 'factorX'))
             self._accX = None
-        if maxlen == len(accY):
+
+        if maxlen == accZ.shape[1]:
             self._accY = accY
         else:
             StandardLogger.warning(message.format('accY', 'factorY'))
             self._accY = None
-        if maxlen == len(accZ):
+
+        if maxlen == accZ.shape[1]:
             self._accZ = accZ
         else:
             StandardLogger.warning(message.format('accZ', 'factorZ'))
@@ -153,10 +160,22 @@ class SeismicWave(Comp.Component):
         GMs:list[OpsObject.OpsPlainGroundMotion] = []
         for acc, f in zip([self._accX, self._accY, self._accZ], self._factors):
             if acc is not None:
-                GMs.append(OpsObject.OpsPlainGroundMotion(self._times, acc, factor=f))
+                accTimes = OpsObject.OpsPathTimeSerise(self._times, acc)
+                GMs.append(OpsObject.OpsPlainGroundMotion(accTimeHist=accTimes, factor=f))
             else:
                 GMs.append(None)
         return GMs
+    
+    def plotWave(self):
+        t = self._times
+        accx = self._accX
+        accy = self._accY
+        accz = self._accZ
+
+        plt.plot(t, accx[0])
+        plt.plot(t, accy[0])
+        plt.plot(t, accz[0])
+
     
     # @staticmethod
     # def LoadRecordFromPEERFile(filePath):
@@ -218,8 +237,8 @@ class EarthquakeLoads(Comp.Loads):
     def _OpsLoadBuild(self):
         for dof, opsGM in enumerate(self._seismicWave._OpsGroundMotions):
             if opsGM:
-                OpsCommandLogger.info('ops.imposedMotion({}, {}, {}})'.format(self._node.OpsNode.uniqNum, dof, opsGM.uniqNum))
-                ops.imposedMotion(self._node.OpsNode.uniqNum, dof, opsGM.uniqNum)
+                ops.imposedMotion(self._node.OpsNode.uniqNum, dof+1, opsGM.uniqNum)
+                OpsCommandLogger.info('ops.imposedMotion({}, {}, {})'.format(self._node.OpsNode.uniqNum, dof+1, opsGM.uniqNum))
 
             
     
