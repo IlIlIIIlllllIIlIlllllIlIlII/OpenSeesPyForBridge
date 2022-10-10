@@ -1,4 +1,3 @@
-from enum import Enum
 import numpy as np
 import openseespy.opensees as ops
 from abc import ABCMeta, abstractmethod
@@ -14,6 +13,7 @@ class Component(metaclass=ABCMeta):
         self._type = "component"
         self._uniqNum = None
         self._name = name
+        self._linkedComp:self = None
         # self._argsHash = -1
         # self._kwargsHash = -1
     def __eq__(self, __o) -> bool:
@@ -31,8 +31,6 @@ class Component(metaclass=ABCMeta):
     def __hash__(self) -> int:
         return hash(repr(self))
 
-
-
     @property
     def val(self):
         ...
@@ -40,11 +38,15 @@ class Component(metaclass=ABCMeta):
     @property
     def attr(self):
         return [self._type, self._name, self._uniqNum]
+# class CompCategory:
 
 class CompMgr:
     _uniqNum = 0
     _compDic: dict = {}
-    _allComp: list[Component] = []
+    _allUniqComp = []
+    _allOtherComp: list[Component] = []
+    _allOpsObject:list = []
+    _allPart:list = []
     OpsCommandLogger.info('ops.model(\'{}\', \'{}\', {}, \'{}\', {})'.format("basic", "-ndm", 3, "-ndf", 6))
     ops.model("basic", "-ndm", 3, "-ndf", 6)
 
@@ -54,38 +56,72 @@ class CompMgr:
             comp:Component = args[0]
             func(*args, **kwargs)
 
-            _, exists_comp = cls.findSameValueComp(comp)
+            _, exists_comp = cls.FindSameValueComp(comp)
 
             if exists_comp is None:
-                cls._allComp.append(comp)
+                # cls._allComp.append(comp)
+                cls.StoreComp(comp)
                 comp._uniqNum = cls._uniqNum
                 cls._uniqNum += 1
+                cls._allUniqComp.append(comp)
             else:
                 comp._uniqNum = exists_comp._uniqNum
-                if isinstance(comp, OpsObj):
-                   comp._linkedOpsObj = exists_comp 
-                cls._allComp.append(comp)
-
+                comp._linkedComp = exists_comp
+                # if isinstance(comp, OpsObj):
+                #     comp._linkedComp = exists_comp 
+                    # cls._allOpsObject.append(comp)
+                cls.StoreComp(comp)
+                
             if comp._name != "" and comp._name != exists_comp:
                 cls.addCompName(comp._name, comp._uniqNum)
         return Wrapper
 
+    @classmethod
+    def StoreComp(cls, Comp):
+        if isinstance(Comp, OpsObj):
+            cls._allOpsObject.append(Comp)
+        elif isinstance(Comp, Parts):
+            cls._allPart.append(Comp)
+        else:
+            cls._allOtherComp.append(Comp)
 
 
     @classmethod
-    def findSameValueComp(cls, tarComp: Component):
-        if len(cls._allComp) == 0:
-            return (None, None)
-        for index, Comp in enumerate(cls._allComp):
-            if Comp.__class__ == tarComp.__class__:
-                # if Comp.val == tarComp.val:
-                if CompMgr.CompareCompVal(Comp.val, tarComp.val):
-                    return index, Comp 
-            else:
-                pass
+    def FindSameValueComp(cls, tarComp: Component):
+        if isinstance(tarComp, OpsObj):
+            CertainList = cls._allOpsObject
+        elif isinstance(tarComp, Parts):
+            CertainList = cls._allPart
+        else:
+            CertainList = cls._allOtherComp
+        return cls.FindSameValeCompInCertainList(tarComp, CertainList)
+        
+        # if len(cls._allOtherComp) == 0:
+        #     return (None, None)
+        # for index, Comp in enumerate(cls._allOtherComp):
+        #     if Comp.__class__ == tarComp.__class__:
+        #         # if Comp.val == tarComp.val:
+        #         if CompMgr.CompareCompVal(Comp.val, tarComp.val):
+        #             return index, Comp 
+        #     else:
+        #         pass
 
-        return (None, None)
-    
+        # return (None, None)
+        ...
+        
+
+    @classmethod
+    def FindSameValeCompInCertainList(cls, tarComp:Component, CertainList:list[Component]):
+
+        if len(CertainList) == 0:
+            return (None, None) 
+        
+        for idx, Comp in enumerate(CertainList):
+            if CompMgr.CompareCompVal(Comp.val, tarComp.val):
+                return idx, Comp
+
+        return None, None
+
     @staticmethod
     def CompareCompVal(val1, val2):
         flag = True
@@ -106,8 +142,8 @@ class CompMgr:
 
     @classmethod
     def removeComp(cls, comp:Component):
-        i, exists_Comp = cls.findSameValueComp(comp)
-        cls._allComp.pop(i)
+        i, exists_Comp = cls.FindSameValueComp(comp)
+        cls._allOtherComp.pop(i)
         if comp._name in cls._compDic.keys():
             cls._compDic.pop(comp._name)
 
@@ -121,7 +157,7 @@ class CompMgr:
     
     @classmethod
     def clearComp(cls):
-        cls._allComp:list[Component] = []
+        cls._allOtherComp:list[Component] = []
         cls._compDic = {}
         cls._uniqNum = 0
         OpsCommandLogger.info('ops.wipe()'.format())
@@ -130,11 +166,11 @@ class CompMgr:
     @classmethod
     @property
     def State(cls):
-        return str("当前共有组件:{}个\n组件字典为:{}".format(len(cls._allComp), cls._compDic))
+        return str("当前共有组件:{}个\n组件字典为:{}".format(len(cls._allOtherComp), cls._compDic))
 
     @classmethod
     def getCompbyName(cls, name, compClass:Component):
-        for comp in cls._allComp:
+        for comp in cls._allOtherComp:
             if isinstance(comp, compClass):
                 if comp._name == name:
                     return True, comp
@@ -143,12 +179,27 @@ class CompMgr:
 
     @classmethod
     def getCompByUniqNum(cls, uniqNum, compClass:Component):
-        for comp in cls._allComp:
-            if isinstance(comp, compClass):
-                if comp._uniqNum == uniqNum:
-                    return True, comp
-        
+        if issubclass(compClass, OpsObj):
+            CertainList = cls._allOpsObject
+        elif issubclass(compClass, Parts):
+            CertainList = cls._allPart
+        else:
+            CertainList = cls._allOpsObject
+
+        return cls.getCompByUniqNumInCertainList(uniqNum, CertainList)
+    
+    @classmethod
+    def getCompByUniqNumInCertainList(cls, uniqNum, CertainList:list[Component]):
+        for comp in CertainList:
+            if comp._uniqNum == uniqNum:
+                return True, comp
+
         return False, None
+
+    @classmethod
+    @property
+    def allComponent(cls):
+        return cls._allOpsObject + cls._allPart + cls._allOtherComp
 
 class OpsObj(Component, metaclass=ABCMeta):
     @abstractmethod
@@ -156,7 +207,7 @@ class OpsObj(Component, metaclass=ABCMeta):
       super(OpsObj, self).__init__(name)
       self._type += "->OpsObj"
       self._built = False
-      self._linkedOpsObj:OpsObj = None
+      self._linkedComp:OpsObj = None
 
     @abstractmethod
     def _create(self):
@@ -164,14 +215,14 @@ class OpsObj(Component, metaclass=ABCMeta):
 
     @property
     def uniqNum(self):
-        if self._linkedOpsObj == None:
+        if not self._linkedComp:
             if not self._built:
                 self._create()
                 self._built = True
             return self._uniqNum
         else:
             self._built = True
-            return self._linkedOpsObj.uniqNum
+            return self._linkedComp.uniqNum
 
 # * 参数类，派生出主梁截面参数类，桥墩截面参数类......
 class Paras(Component, metaclass=ABCMeta):
@@ -215,3 +266,26 @@ class Loads(Component, metaclass=ABCMeta):
         self._OpsLoadBuild()
 # class HRectSect():
 #     ...
+
+class Boundary(Component, metaclass=ABCMeta):
+    @abstractmethod
+    def __init__(self, name: str = ""):
+        super().__init__(name)
+        self._type += '->Bounday'
+        self._activated = False
+
+
+    @abstractmethod
+    def _activate(self): ...
+
+
+    def activate(self):
+        if self._activated:
+            return
+        if not self._linkedComp:
+            if not self._activated:
+                self._activate()
+                
+        else:
+            self._linkedComp.activate()
+

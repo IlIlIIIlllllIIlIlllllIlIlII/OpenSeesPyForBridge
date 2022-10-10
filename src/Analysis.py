@@ -1,20 +1,14 @@
-from cmath import isfinite
 from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler
-from platform import node
-from signal import raise_signal
-from symbol import annassign
-from sys import flags
 # from email import message
 # from multiprocessing import pool
 # from sys import flags
 # from tracemalloc import StatisticDiff
 from typing import overload
-from webbrowser import BackgroundBrowser
 import numpy as np
 import matplotlib.pyplot as plt
+from enum import Enum
+import openseespy.opensees as ops
 
-from src.Unit import ConvertToBaseUnit
 
 from . import UtilTools
 from . import Comp
@@ -22,9 +16,9 @@ from . import Load
 from . import OpsObject
 from . import Part
 from . import GlobalData
-from enum import Enum
-import openseespy.opensees as ops
+from . import Boundary
 from .log import *
+from .Unit import ConvertToBaseUnit
 
 class ConstraintsEnum(Enum):
     Plain = 'Plain'
@@ -314,11 +308,19 @@ class AnalsisModel(Comp.Component):
         cls._AnalsyFinshed = False
 
     @classmethod
-    def StoreBoundaryToDict(cls, key, boundary):
-        if key in cls._BoundaryDict and boundary not in cls._BoundaryDict[key]:
+    def StoreBoundary(cls, key:Comp.Parts, boundary:Comp.Boundary):
+        if key._uniqNum in cls._BoundaryDict and boundary not in cls._BoundaryDict[key._uniqNum]:
             cls._BoundaryDict[key].append(boundary)
         else:
             cls._BoundaryDict[key] = [boundary]
+
+    @classmethod
+    def GetBoundaryFromModel(cls, key:Comp.Parts):
+        if key._uniqNum in cls._BoundaryDict:
+            return True, cls._BoundaryDict[key._uniqNum]
+        else:
+            return False, None
+        
 
     @classmethod
     def AddSegment(cls, seg:Part.Segment):
@@ -326,35 +328,35 @@ class AnalsisModel(Comp.Component):
 
 
     @classmethod
-    def AddBoundary(cls, boundary:Part.BoundaryDescriptor, checkFunc=lambda x:True if x else False):
+    def AddBoundary(cls, boundary:Comp.Boundary, checkFunc=lambda x:True if x else False):
         if not checkFunc:
             print("boundary {} failed the checkFunc")
             return False
-        if isinstance(boundary, Part.BridgeFixedBoundary):
-            cls.StoreBoundaryToDict(boundary.BridgeNode, boundary)
+        if isinstance(boundary, Boundary.BridgeFixedBoundary):
+            cls.StoreBoundary(boundary.FixedNode, boundary)
 
-        elif isinstance(boundary, Part.BridgeBearingBoundary):
+        elif isinstance(boundary, Boundary.BridgeBearingBoundary):
             nodeI = boundary._NodeI
             nodeJ = boundary._NodeJ
             
-            cls.StoreBoundaryToDict(nodeI, boundary)
-            cls.StoreBoundaryToDict(nodeJ, boundary)
+            cls.StoreBoundary(nodeI, boundary)
+            cls.StoreBoundary(nodeJ, boundary)
 
-        elif isinstance(boundary, Part.BridgeSimplePileSoilBoundary):
+        elif isinstance(boundary, Boundary.BridgeSimplePileSoilBoundary):
             nodeI = boundary._NodeI
             nodeJ = boundary._NodeJ
-            cls.StoreBoundaryToDict(nodeI, boundary)
-            cls.StoreBoundaryToDict(nodeJ, boundary)
+            cls.StoreBoundary(nodeI, boundary)
+            cls.StoreBoundary(nodeJ, boundary)
 
-        elif isinstance(boundary, Part.BridgeFullPileSoilBoundary):
+        elif isinstance(boundary, Boundary.BridgeFullPileSoilBoundary):
             segs = boundary._pileSegs
             for seg in segs:
-                cls.StoreBoundaryToDict(seg, boundary)
-        elif isinstance(boundary, Part.BridgeEQDOFSBoundary):
+                cls.StoreBoundary(seg, boundary)
+        elif isinstance(boundary, Boundary.BridgeEQDOFSBoundary):
             nodeI = boundary._nodeI
             nodeJ = boundary._nodeJ
-            cls.StoreBoundaryToDict(nodeI, boundary)
-            cls.StoreBoundaryToDict(nodeJ, boundary)
+            cls.StoreBoundary(nodeI, boundary)
+            cls.StoreBoundary(nodeJ, boundary)
                 
 
         else:
@@ -374,7 +376,7 @@ class AnalsisModel(Comp.Component):
         ExpandBoudary = []
         for key, val in cls._BoundaryDict.items():
             for boundary in val:
-                if isinstance(boundary, Part.BridgeFullPileSoilBoundary) and not boundary._activated:
+                if isinstance(boundary, Boundary.BridgeFullPileSoilBoundary) and not boundary._activated:
                     x, y, z = boundary._activate()
                     cls._CuboidsList += boundary._SoilCuboids
                     ExpandBoudary += x
@@ -394,33 +396,33 @@ class AnalsisModel(Comp.Component):
                 raise Exception("failed to pass checkFunc")
             
             for boundary in val:
-                if isinstance(boundary, Part.BridgeFixedBoundary) and not boundary._activated:
-                    flag, node = cls.Inquire.FindNode(boundary.BridgeNode.point)
+                if isinstance(boundary, Boundary.BridgeFixedBoundary) and not boundary._activated:
+                    flag, node = cls.Inquire.FindNode(boundary.FixedNode.point)
                     if flag:
                         boundary._activate()
                     else:
-                        raise Exception('can not find BridgeNode: {}'.format(boundary.BridgeNode.point))
-                elif isinstance(boundary, Part.BridgeBearingBoundary) and not boundary._activated:
+                        raise Exception('can not find BridgeNode: {}'.format(boundary.FixedNode.point))
+                elif isinstance(boundary, Boundary.BridgeBearingBoundary) and not boundary._activated:
                     flag1, node1 = cls.Inquire.FindNode(boundary._NodeI.point)
                     flag2, node2 = cls.Inquire.FindNode(boundary._NodeJ.point)
 
                     if flag1 and flag2:
                         ele = boundary._activate()
                         cls._SpecialElementList.append(ele)
-                elif isinstance(boundary, Part.BridgeEQDOFSBoundary) and not boundary._activated:
+                elif isinstance(boundary, Boundary.BridgeEQDOFSBoundary) and not boundary._activated:
                     flag1, node1 = cls.Inquire.FindNode(boundary._nodeI.point)
                     flag2, node2 = cls.Inquire.FindNode(boundary._nodeJ.point)
 
                     if flag1 and flag2:
                         ele = boundary._activate()
-                elif isinstance(boundary, Part.BridgeSimplePileSoilBoundary) and not boundary._activated:
+                elif isinstance(boundary, Boundary.BridgeSimplePileSoilBoundary) and not boundary._activated:
                     ...
-                elif isinstance(boundary, Part.BridgeFullPileSoilBoundary) and not boundary._activated:
+                elif isinstance(boundary, Boundary.BridgeFullPileSoilBoundary) and not boundary._activated:
                     msg = 'Unexpted BridgeFullPileSoilBoundary:{}, all this Boundary should be expanded to lower form boundary'.format(boundary._uniqNum)
                     StandardLogger.error(msg)
                     raise Exception(msg)
                 elif boundary._activate:
-                    msg = 'Boundary:{} {} has been expanded'.format(boundary._type, boundary._uniqNum)
+                    msg = 'Boundary:{} {} has been activate'.format(boundary._type, boundary._uniqNum)
                     StandardLogger.info(msg)
                 else:
                     msg = 'Unspported BoundaryType:{}'.format(boundary._type)
@@ -430,43 +432,43 @@ class AnalsisModel(Comp.Component):
 
 
         
-    @classmethod
-    def AddFixBoundary(cls, points:list[tuple[float, ...]], fixval:list[int]):
-        if type(points) is tuple:
-            points = [points]
+    # @classmethod
+    # def AddFixBoundary(cls, points:list[tuple[float, ...]], fixval:list[int]):
+    #     if type(points) is tuple:
+    #         points = [points]
 
-        if not UtilTools.Util.isOnlyHas(fixval, [0, 1], flatten=True):
-            raise Exception("Wrong Params:{}".format(fixval))
+    #     if not UtilTools.Util.isOnlyHas(fixval, [0, 1], flatten=True):
+    #         raise Exception("Wrong Params:{}".format(fixval))
 
-        for p in points:
-            flag, node = cls.Inquire.FindNode(p)
-            if flag:
-                # cls._BoundaryNodes.append(node)
-                # cls._BoundaryList.append(Part.BridgeFixedBoundary(node, fixval))
-                cls.StoreBoundaryToDict(node, Part.BridgeFixedBoundary(node, fixval))
-            else:
-                StandardLogger.warning("point:{} can find in this Analsy model, ignored".format(p))
+    #     for p in points:
+    #         flag, node = cls.Inquire.FindNode(p)
+    #         if flag:
+    #             # cls._BoundaryNodes.append(node)
+    #             # cls._BoundaryList.append(Part.BridgeFixedBoundary(node, fixval))
+    #             cls.StoreBoundary(node, Part.BridgeFixedBoundary(node, fixval))
+    #         else:
+    #             StandardLogger.warning("point:{} can find in this Analsy model, ignored".format(p))
 
-    @classmethod
-    def AddPlasticBearingBoundary(cls, p1:tuple[float], E:float=None, plasticStrain= ConvertToBaseUnit(0.02, 'm'), dirVal:list[int]=[1, 1, 0, 0, 0, 0]):
+    # @classmethod
+    # def AddPlasticBearingBoundary(cls, p1:tuple[float], E:float=None, plasticStrain= ConvertToBaseUnit(0.02, 'm'), dirVal:list[int]=[1, 1, 0, 0, 0, 0]):
         
-        if not UtilTools.Util.isOnlyHas(dirVal, [0, 1], flatten=True):
-            raise Exception("Wrong Params:{}".format(dirVal))
+    #     if not UtilTools.Util.isOnlyHas(dirVal, [0, 1], flatten=True):
+    #         raise Exception("Wrong Params:{}".format(dirVal))
 
-        flag1, node1 = cls.Inquire.FindNode(p1)
-        x, y, z = p1
-        if flag1:
-            node2 = Part.BridgeNode(x+GlobalData.DEFVAL._COOROFFSET_, y+GlobalData.DEFVAL._COOROFFSET_, z+GlobalData.DEFVAL._COOROFFSET_)
-            AnalsisModel._SpecialNodeList.append(node2)
-            AnalsisModel.AddFixBoundary(node2.point, [1]*6)
+    #     flag1, node1 = cls.Inquire.FindNode(p1)
+    #     x, y, z = p1
+    #     if flag1:
+    #         node2 = Part.BridgeNode(x+GlobalData.DEFVAL._COOROFFSET_, y+GlobalData.DEFVAL._COOROFFSET_, z+GlobalData.DEFVAL._COOROFFSET_)
+    #         AnalsisModel._SpecialNodeList.append(node2)
+    #         AnalsisModel.AddFixBoundary(node2.point, [1]*6)
 
-            cls._BoundaryNodes.append(node1)
-            cls._BoundaryNodes.append(node2)
-            b = Part.BridgeBearingBoundary(node1, node2, plasticStrain, E, dirVal)
-            AnalsisModel._SpecialElementList.append(b._BearingElement)
-            AnalsisModel._BoundaryList.append(b)
-        else:
-            StandardLogger.warning("point:{} can find in this Analsy model, ignored".format(p1))
+    #         cls._BoundaryNodes.append(node1)
+    #         cls._BoundaryNodes.append(node2)
+    #         b = Part.BridgeBearingBoundary(node1, node2, plasticStrain, E, dirVal)
+    #         AnalsisModel._SpecialElementList.append(b._BearingElement)
+    #         AnalsisModel._BoundaryList.append(b)
+    #     else:
+    #         StandardLogger.warning("point:{} can find in this Analsy model, ignored".format(p1))
     @classmethod
     def AddPattern(cls, type:str):
         if type == 'static':
