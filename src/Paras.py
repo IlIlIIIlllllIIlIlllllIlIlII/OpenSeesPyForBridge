@@ -426,10 +426,10 @@ class ConcreteParas(MaterialParas):
         """
         return [self._fpc, self._epsc0, self._fpcu, self._epsu, self._lambda, self._ft, self._ets]
 
-    def __repr__(self):
-        a = ","
-        b = [str(i) for i in self.val]
-        return a.join(b)
+    # def __repr__(self):
+    #     a = ","
+    #     b = [str(i) for i in self.val]
+    #     return a.join(b)
 
 class SteelParas(MaterialParas):
     __slots__ = ['_type', '_uniqNum', '_name', "_fy", "_E0", "_b", "_R0", "_R1", "_R2"]

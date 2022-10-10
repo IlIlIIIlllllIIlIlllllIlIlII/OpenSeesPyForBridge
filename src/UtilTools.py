@@ -720,7 +720,7 @@ class BarsTools:
                         break
 
                 except:
-                    print("Warring: Wrong Paras")
+                    print("An error occurred while searching for the closest target reinforcement ratio {}\nThe result has been set to r:{}\tNs:{}\tAs{}".format(r, r_res, Ns_res, As_res))
                     break
 
             return ([r_res], [Ns_res], [As_res])

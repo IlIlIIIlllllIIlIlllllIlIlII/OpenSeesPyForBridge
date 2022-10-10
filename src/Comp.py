@@ -1,3 +1,5 @@
+from ast import arg
+from http.client import FOUND
 import numpy as np
 import openseespy.opensees as ops
 from abc import ABCMeta, abstractmethod
@@ -10,12 +12,12 @@ from .log import *
 class Component(metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, name: str = ""):
-        self._type = "component"
+        self._type = "Component"
         self._uniqNum = None
         self._name = name
-        self._linkedComp:self = None
-        # self._argsHash = -1
-        # self._kwargsHash = -1
+        # self._linkedComp:self = None
+        self._argsHash = -1
+        self._kwargsHash = -1
     def __eq__(self, __o) -> bool:
         if type(self) == type(__o) and self.val == __o.val:
             return True
@@ -39,41 +41,99 @@ class Component(metaclass=ABCMeta):
     def attr(self):
         return [self._type, self._name, self._uniqNum]
 # class CompCategory:
-
+class State:
+    Found = 1
+    Simailar = 2
+    NotFound = 3
+    
 class CompMgr:
     _uniqNum = 0
-    _compDic: dict = {}
-    _allUniqComp = []
+    _compDic: dict[int:Component] = {}
+    _FLAG_INSTANTIATED = State.NotFound
+    _allUniqComp = {}
+
     _allOtherComp: list[Component] = []
     _allOpsObject:list = []
     _allPart:list = []
+
     OpsCommandLogger.info('ops.model(\'{}\', \'{}\', {}, \'{}\', {})'.format("basic", "-ndm", 3, "-ndf", 6))
     ops.model("basic", "-ndm", 3, "-ndf", 6)
 
     @classmethod
+    def _new(cls, func):
+        # * 用于装饰__new__ 函数, 当_allUniqComp中存在相同实例是,返回该实例,并将_FLAG_INSTANTIATED置为True
+        def warpper(*args, **kwargs):
+            c = args[0]
+            h_args = hash(str(args[1:]))
+            h_kwargs = hash(str(kwargs))
+            if h_args in cls._allUniqComp:
+                comp:Component = cls._allUniqComp[h_args]
+                if comp._kwargsHash == h_kwargs:
+                    cls._FLAG_INSTANTIATED = State.Found
+                    return cls._allUniqComp[h_args]
+                else:
+                    cls._FLAG_INSTANTIATED = State.Simailar
+                    return cls._allUniqComp[h_args]
+                
+            else:
+                cls._FLAG_INSTANTIATED = State.NotFound
+                return func(c)
+        
+        return warpper
+                
+
+
+    @classmethod
     def __call__(cls, func):
+        # * 用于装饰__init__函数, 根据_FLAG_INSTANTIATED的不同 确定对应的方法 
         def Wrapper(*args, **kwargs):
             comp:Component = args[0]
-            func(*args, **kwargs)
 
-            _, exists_comp = cls.FindSameValueComp(comp)
+            h_args = hash(str(args[1:]))
+            h_kwargs = hash(str(kwargs))
 
-            if exists_comp is None:
-                # cls._allComp.append(comp)
+            if cls._FLAG_INSTANTIATED == State.Found:
+                cls._FLAG_INSTANTIATED = State.NotFound
+
+            elif cls._FLAG_INSTANTIATED == State.NotFound:
+                func(*args, **kwargs)
+                comp._argsHash = h_args
+                comp._kwargsHash = h_kwargs
+                comp._uniqNum = cls.getUniqNum()
                 cls.StoreComp(comp)
-                comp._uniqNum = cls._uniqNum
-                cls._uniqNum += 1
-                cls._allUniqComp.append(comp)
-            else:
-                comp._uniqNum = exists_comp._uniqNum
-                comp._linkedComp = exists_comp
-                # if isinstance(comp, OpsObj):
-                #     comp._linkedComp = exists_comp 
-                    # cls._allOpsObject.append(comp)
-                cls.StoreComp(comp)
+                cls._allUniqComp[h_args] = comp
+            
+            elif cls._FLAG_INSTANTIATED == State.Simailar:
+                uniqNum = comp._uniqNum
+                func(*args, **kwargs)
+                comp._argsHash = h_args
+                comp._kwargsHash = h_kwargs
+                comp._uniqNum = uniqNum
+                # cls.StoreComp(comp)
                 
-            if comp._name != "" and comp._name != exists_comp:
-                cls.addCompName(comp._name, comp._uniqNum)
+                cls._FLAG_INSTANTIATED = State.NotFound
+
+
+            # func(*args, **kwargs)
+
+            # _, exists_comp = cls.FindSameValueComp(comp)
+
+            # if exists_comp is None:
+            #     # cls._allComp.append(comp)
+            #     cls.StoreComp(comp)
+            #     comp._uniqNum = cls._uniqNum
+            #     cls._uniqNum += 1
+            #     cls._allUniqComp.append(comp)
+            # else:
+            #     comp._uniqNum = exists_comp._uniqNum
+            #     comp._linkedComp = exists_comp
+            #     # if isinstance(comp, OpsObj):
+            #     #     comp._linkedComp = exists_comp 
+            #         # cls._allOpsObject.append(comp)
+            #     cls.StoreComp(comp)
+                
+            # if comp._name != "" and comp._name != exists_comp:
+            #     cls.addCompName(comp._name, comp._uniqNum)
         return Wrapper
 
     @classmethod
@@ -138,6 +198,7 @@ class CompMgr:
 
     @classmethod
     def getUniqNum(cls):
+        cls._uniqNum += 1
         return cls._uniqNum
 
     @classmethod
@@ -157,11 +218,19 @@ class CompMgr:
     
     @classmethod
     def clearComp(cls):
-        cls._allOtherComp:list[Component] = []
-        cls._compDic = {}
+        # cls._allOtherComp:list[Component] = []
+        # cls._compDic = {}
+        # cls._uniqNum = 0
+        # OpsCommandLogger.info('ops.wipe()'.format())
+        # ops.wipe()
         cls._uniqNum = 0
-        OpsCommandLogger.info('ops.wipe()'.format())
-        ops.wipe()
+        cls._compDic: dict[int:Component] = {}
+        cls._FLAG_INSTANTIATED = State.NotFound
+        cls._allUniqComp = {}
+
+        cls._allOtherComp: list[Component] = []
+        cls._allOpsObject:list = []
+        cls._allPart:list = []
 
     @classmethod
     @property
@@ -200,6 +269,7 @@ class CompMgr:
     @property
     def allComponent(cls):
         return cls._allOpsObject + cls._allPart + cls._allOtherComp
+        
 
 class OpsObj(Component, metaclass=ABCMeta):
     @abstractmethod
@@ -207,7 +277,11 @@ class OpsObj(Component, metaclass=ABCMeta):
       super(OpsObj, self).__init__(name)
       self._type += "->OpsObj"
       self._built = False
-      self._linkedComp:OpsObj = None
+    #   self._linkedComp:OpsObj = None
+
+    @CompMgr._new
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls)
 
     @abstractmethod
     def _create(self):
@@ -215,14 +289,13 @@ class OpsObj(Component, metaclass=ABCMeta):
 
     @property
     def uniqNum(self):
-        if not self._linkedComp:
-            if not self._built:
-                self._create()
-                self._built = True
+        if self._built:
             return self._uniqNum
         else:
+            self._create()
             self._built = True
-            return self._linkedComp.uniqNum
+            return self._uniqNum
+        
 
 # * 参数类，派生出主梁截面参数类，桥墩截面参数类......
 class Paras(Component, metaclass=ABCMeta):
@@ -251,6 +324,9 @@ class Parts(Component, metaclass=ABCMeta):
     # @abstractmethod
     # def _SectReBuild(self):
     #     ...
+    @CompMgr._new
+    def __new__(cls):
+        return super().__new__(cls)
 
 class Loads(Component, metaclass=ABCMeta):
     @abstractmethod
@@ -274,6 +350,10 @@ class Boundary(Component, metaclass=ABCMeta):
         self._type += '->Bounday'
         self._activated = False
 
+    @CompMgr._new
+    def __new__(cls):
+        return super().__new__(cls)
+
 
     @abstractmethod
     def _activate(self): ...
@@ -282,10 +362,8 @@ class Boundary(Component, metaclass=ABCMeta):
     def activate(self):
         if self._activated:
             return
-        if not self._linkedComp:
-            if not self._activated:
-                self._activate()
-                
         else:
-            self._linkedComp.activate()
+            self.activate()
+            self._activated
+            return
 

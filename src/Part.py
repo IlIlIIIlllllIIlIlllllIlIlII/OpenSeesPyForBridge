@@ -19,7 +19,7 @@ class BridgeNode(Comp.Parts):
     @Comp.CompMgr()
     def __init__(self, x:float, y:float, z:float, mass:float=0.0, name="") -> None:
         super(Comp.Parts, self).__init__(name)
-        self._type += "BridgeNode"
+        self._type += "->BridgeNode"
         self._point = (x, y, z)
         self._mass = mass
         self._OpsNode:OpsObject.OpsNode = OpsObject.OpsNode(self._point)
@@ -1757,7 +1757,7 @@ class SoilCuboid(Cuboid):
 
                     np_mass[i1] = np_mass[i2] = np_mass[i3] = np_mass[i4] = np_mass[i5] = np_mass[i6] = np_mass[i7] = np_mass[i8] = mass
 
-                    np_E[i, j, k] = OpsObject.OpsStanderBrickElement(n1.OpsNode, n2.OpsNode, n3.OpsNode, n4.OpsNode, n5.OpsNode, n6.OpsNode, n7.OpsNode, n8.OpsNode, m.uniqNum)
+                    np_E[i, j, k] = OpsObject.OpsStanderBrickElement(n1.OpsNode, n2.OpsNode, n3.OpsNode, n4.OpsNode, n5.OpsNode, n6.OpsNode, n7.OpsNode, n8.OpsNode, m)
         # x_index = [x[0] for x in x_points]
         # y_index = [x[1] for x in y_points]
         # z_index = [x[2] for x in z_points]

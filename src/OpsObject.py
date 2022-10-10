@@ -48,8 +48,8 @@ class OpsNode(Comp.OpsObj):
     def val(self):
         return [self._xyz]
 
-    def __repr__(self):
-        return "({}, {}, {})".format(self._xyz[0], self._xyz[1], self._xyz[2])
+    # def __repr__(self):
+    #     return "({}, {}, {})".format(self._xyz[0], self._xyz[1], self._xyz[2])
 
 class OpsMass(Comp.OpsObj):
     def __init__(self, node:OpsNode, mass:float, dof:list[int]=[0,0,-1,0,0,0], name=""):
