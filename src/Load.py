@@ -60,20 +60,32 @@ class ElementsLoads(StaticLoads):
         return [self._Load, self._Elements]
 
 class Gravity(StaticLoads):
-    def __init__(self, segList:list[Part.Segment], name=''):
+    def __init__(self, segList:list[Part.Segment]=None, CuboList:list[Part.Cuboid]=None, name=''):
         super().__init__(name)
         self._type += '->Gravity'
         self._segList = segList
+        self._CuboList = CuboList
 
     def _OpsLoadBuild(self):
-        for seg in self._segList:
+        if self._segList:
+            for seg in self._segList:
+                ele_ = seg.ELeList
+                mass_ = seg.MassList
+                eleLength_ = seg.EleLength
+                for ele, mass, length in zip(ele_, mass_, eleLength_):
+                    wz = -mass * GlobalData.DEFVAL._G_ / length
+                    OpsObject.OpsEleLoad([ele], wz=wz)
 
-            ele_ = seg.ELeList
-            mass_ = seg.MassList
-            eleLength_ = seg.EleLength
-            for ele, mass, length in zip(ele_, mass_, eleLength_):
-                wz = -mass * GlobalData.DEFVAL._G_ / length
-                OpsObject.OpsEleLoad([ele], wz=wz)
+        if self._CuboList:
+            for cuob in self._CuboList:
+                for i, xval in enumerate(cuob._BridgeNodes):
+                    for j, yval in enumerate(xval):
+                        for k, val in enumerate(yval):
+                            node:Part.BridgeNode = val
+                            grav = cuob._Masses[i, j, k] * GlobalData.DEFVAL._G_
+                            load = [0, 0, -grav, 0, 0, 0]
+                            OpsObject.OpsNodeLoad(load, node.OpsNode)
+                    
             
     @property
     def val(self):

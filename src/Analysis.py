@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from tracemalloc import StatisticDiff
 # from email import message
 # from multiprocessing import pool
 # from sys import flags
@@ -309,10 +310,14 @@ class AnalsisModel(Comp.Component):
 
     @classmethod
     def StoreBoundary(cls, key:Comp.Parts, boundary:Comp.Boundary):
+        # if isinstance(key, Part.BridgeNode) and key.point == (-19000, -25000, -40000):
+        #     StandardLogger.info("get the key, the key is {}".format(key._uniqNum))
         if key._uniqNum in cls._BoundaryDict and boundary not in cls._BoundaryDict[key._uniqNum]:
-            cls._BoundaryDict[key].append(boundary)
+            cls._BoundaryDict[key._uniqNum].append(boundary)
+        elif key._uniqNum in cls._BoundaryDict and boundary in cls._BoundaryDict[key._uniqNum]:
+            StandardLogger.info("BoundaryDict has key:{}, uniqNum:{}, and boundary Type: {}, UniqNum: {} has already in the boundary list".format(key._type, key._uniqNum, boundary._type, boundary._uniqNum))
         else:
-            cls._BoundaryDict[key] = [boundary]
+            cls._BoundaryDict[key._uniqNum] = [boundary]
 
     @classmethod
     def GetBoundaryFromModel(cls, key:Comp.Parts):
@@ -325,6 +330,11 @@ class AnalsisModel(Comp.Component):
     @classmethod
     def AddSegment(cls, seg:Part.Segment):
         cls._SegmentList.append(seg)
+
+    @classmethod
+    def AddCuboid(cls, Cubo:Part.SoilCuboid):
+        cls._CuboidsList.append(Cubo)
+
 
 
     @classmethod
@@ -415,6 +425,7 @@ class AnalsisModel(Comp.Component):
 
                     if flag1 and flag2:
                         ele = boundary._activate()
+                        # cls._SpecialElementList.append(ele)
                 elif isinstance(boundary, Boundary.BridgeSimplePileSoilBoundary) and not boundary._activated:
                     ...
                 elif isinstance(boundary, Boundary.BridgeFullPileSoilBoundary) and not boundary._activated:
@@ -513,9 +524,9 @@ class AnalsisModel(Comp.Component):
         if not cls._FEMBuilt:
             cls.buildFEM()
         cls._AnalsyFinshed = False
-        if cls._SegmentList:
+        if cls._SegmentList or cls._CuboidsList:
             cls._StaticPattern.uniqNum
-            g = Load.Gravity(cls._SegmentList)
+            g = Load.Gravity(segList=cls._SegmentList, CuboList=cls._CuboidsList)
             g.ApplyLoad()
 
         # if Analsis._Gravity:
@@ -570,9 +581,9 @@ class AnalsisModel(Comp.Component):
                 OpsCommandLogger.info('ops.analyze(*{})'.format(analysParam.analyze))
                 output = ops.analyze(*analysParam.analyze)
                 if output != 0:
-                    mess = "Opensees Analyze failed, return code: {}".format(output)
-                    print(mess)
-                    raise Exception(mess)
+                    msg = "Opensees Analyze failed, return code: {}".format(output)
+                    print(msg)
+                    raise Exception(msg)
 
                 OpsCommandLogger.info('ops.getTime()'.format())
                 time = ops.getTime()

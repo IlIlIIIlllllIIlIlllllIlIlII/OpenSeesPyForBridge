@@ -104,6 +104,7 @@ class OpsFix(OpsBoundary):
 
     def _create(self):
         OpsCommandLogger.info('ops.fix({}, *{})'.format(self._node.uniqNum, self._fix))
+        print("FIXED")
         ops.fix(self._node.uniqNum, *self._fix)
 
 class OpsEqualDOF(Comp.OpsObj):
@@ -180,6 +181,7 @@ class OpsNDMaterial(OpsMaterial, metaclass=ABCMeta):
     def __init__(self, name=""):
         super().__init__(name)
         self._type += '->Ops nDMateial'
+        # self._create()
     
     @abstractmethod
     def _create(self):
@@ -204,15 +206,16 @@ class OpsPIMYMaterial(OpsNDMaterial):
     def val(self):
         return [self._nd, self._rho, self._refShearModul, self._refBulkModul, self._cohesi, self._peakShearStra]
 
-class OpsClayMaterial(OpsPIMYMaterial):
-    def __init__(self, nd, rho, refShearModul, refBulkModul, cohesi, peakShearStra, name=""):
-        super().__init__(nd, rho, refShearModul, refBulkModul, cohesi, peakShearStra, name)
-    def _create(self):
-        return super()._create()
+OpsClayMaterial = OpsPIMYMaterial
+# class OpsClayMaterial(OpsPIMYMaterial):
+#     def __init__(self, nd, rho, refShearModul, refBulkModul, cohesi, peakShearStra, name=""):
+#         super().__init__(nd, rho, refShearModul, refBulkModul, cohesi, peakShearStra, name)
+#     def _create(self):
+#         return super()._create()
 
-    @property
-    def val(self):
-        return super().val
+#     @property
+#     def val(self):
+#         return super().val
 
 class OpsPDMYMaterial(OpsNDMaterial):
     @Comp.CompMgr()
@@ -233,22 +236,23 @@ class OpsPDMYMaterial(OpsNDMaterial):
         self._liquefac = liquefac
 
     def _create(self):
+        OpsCommandLogger.info('ops.nDMaterial("PressureDependMultiYield", {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, *{}, *{})'.format(self._uniqNum, self._nd, self._rho, self._refShearModul, self._refBulkModul, self._frictionAng, self._peakShearStra, self._refPress, self._pressDependCoe, self._PTAng, self._contrac, self._dilat, self._liquefac))
         ops.nDMaterial('PressureDependMultiYield', self._uniqNum, self._nd, self._rho, self._refShearModul, self._refBulkModul, self._frictionAng, self._peakShearStra, self._refPress, self._pressDependCoe, self._PTAng, self._contrac, *self._dilat, *self._liquefac)
 
     @property
     def val(self):
         return [self._nd, self._rho, self._refBulkModul, self._refShearModul, self._frictionAng, self._peakShearStra, self._refPress, self._pressDependCoe, self._PTAng, self._contrac, self._dilat, self._liquefac]
-
-class OpsSandMaterial(OpsPDMYMaterial):
-    def __init__(self, nd, rho, refShearModul, refBulkModul, frictionAng, peakShearStra, refPress, pressDependCoe, PTAng, contrac, dilat, liquefac, name=""):
-        super().__init__(nd, rho, refShearModul, refBulkModul, frictionAng, peakShearStra, refPress, pressDependCoe, PTAng, contrac, dilat, liquefac, name)
+OpsSandMaterial = OpsPDMYMaterial
+# class OpsSandMaterial(OpsPDMYMaterial):
+#     def __init__(self, nd, rho, refShearModul, refBulkModul, frictionAng, peakShearStra, refPress, pressDependCoe, PTAng, contrac, dilat, liquefac, name=""):
+#         super().__init__(nd, rho, refShearModul, refBulkModul, frictionAng, peakShearStra, refPress, pressDependCoe, PTAng, contrac, dilat, liquefac, name)
     
-    def _create(self):
-        return super()._create()
+#     def _create(self):
+#         return super()._create()
 
-    @property
-    def val(self):
-        return super().val
+#     @property
+#     def val(self):
+#         return super().val
 
 class OpsUniaxialMaterial(OpsMaterial, metaclass=ABCMeta):
     @abstractmethod
@@ -1000,7 +1004,7 @@ class OpsNodeLoad(OpsPlainLoads):
     def _create(self):
         # load(nodeTag, *loadValues)
         
-        OpsCommandLogger.info('ops.load({}, *{})'.format(self._Node.uniqNum, *self._Load))
+        OpsCommandLogger.info('ops.load({}, *{})'.format(self._Node.uniqNum, self._Load))
         ops.load(self._Node.uniqNum, *self._Load)
     
     @property

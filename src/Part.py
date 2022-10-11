@@ -1597,35 +1597,41 @@ class Cuboid(Body):
             
             if x == len(self._eleLensL):
                 ix = x
+            elif sum(self._eleLensL[x:]) < l:
+                ix = len(self._eleLensL)
             else:
-                for idx in range(len(self._eleLensL) - x):
-                    if sum(self._eleLensL[x:x+idx+1]) == l:
-                        ix = x+1+idx
+                for delta_i in range(len(self._eleLensL) - x):
+                    if sum(self._eleLensL[x:x+delta_i+1]) == l:
+                        ix = x+1+delta_i
                         break
-                    elif sum(self._eleLensL[x:x+idx+1]) > l:
-                        ix = x+idx
+                    elif sum(self._eleLensL[x:x+delta_i+1]) > l:
+                        ix = x+delta_i
                         break
             
             if y == len(self._eleLensW):
                 iy = y
+            elif sum(self._eleLensW[y:]) < w:
+                iy = len(self._eleLensW)
             else:
-                for idx in range(len(self._eleLensW) - y):
-                    if sum(self._eleLensW[y:y+idx+1]) == w:
-                        iy = y+idx+1
+                for delta_i in range(len(self._eleLensW) - y):
+                    if sum(self._eleLensW[y:y+delta_i+1]) == w:
+                        iy = y+delta_i+1
                         break
-                    elif sum(self._eleLensW[y:y+idx+1]) > w:
-                        iy = y+idx
+                    elif sum(self._eleLensW[y:y+delta_i+1]) > w:
+                        iy = y+delta_i
                         break
 
-            if z == len(self._eleLensW):
+            if z == len(self._eleLensH):
                 iz = z
+            elif sum(self._eleLensH[z:]) < h:
+                iz = len(self._eleLensH)
             else:
-                for idx in range(len(self._eleLensH) - z):
-                    if sum(self._eleLensH[z:z+idx+1]) == h:
-                        iz = z+idx+1
+                for delta_i in range(len(self._eleLensH) - z):
+                    if sum(self._eleLensH[z:z+delta_i+1]) == h:
+                        iz = z+delta_i+1
                         break
-                    elif sum(self._eleLensH[z:z+idx+1]) > h:
-                        iz = z+idx
+                    elif sum(self._eleLensH[z:z+delta_i+1]) > h:
+                        iz = z+delta_i
                         break
 
             return True, [(x, ix+1), (y, iy+1), (z, iz+1)]

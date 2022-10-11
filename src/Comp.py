@@ -57,15 +57,15 @@ class CompMgr:
     _allPart:list = []
 
     OpsCommandLogger.info('ops.model(\'{}\', \'{}\', {}, \'{}\', {})'.format("basic", "-ndm", 3, "-ndf", 6))
-    ops.model("basic", "-ndm", 3, "-ndf", 6)
+    ops.model("basic", "-ndm", 3, "-ndf", 3)
 
     @classmethod
     def _new(cls, func):
         # * 用于装饰__new__ 函数, 当_allUniqComp中存在相同实例是,返回该实例,并将_FLAG_INSTANTIATED置为True
         def warpper(*args, **kwargs):
-            c = args[0]
-            h_args = hash(str(args[1:]))
-            h_kwargs = hash(str(kwargs))
+            c:Component = args[0]
+            h_args = hash(str(args[1:])+str(c.__class__))
+            h_kwargs = hash(str(kwargs)+str(c.__class__))
             if h_args in cls._allUniqComp:
                 comp:Component = cls._allUniqComp[h_args]
                 if comp._kwargsHash == h_kwargs:
@@ -89,8 +89,8 @@ class CompMgr:
         def Wrapper(*args, **kwargs):
             comp:Component = args[0]
 
-            h_args = hash(str(args[1:]))
-            h_kwargs = hash(str(kwargs))
+            h_args = hash(str(args[1:])+str(comp.__class__))
+            h_kwargs = hash(str(kwargs)+str(comp.__class__))
 
             if cls._FLAG_INSTANTIATED == State.Found:
                 cls._FLAG_INSTANTIATED = State.NotFound
@@ -102,6 +102,8 @@ class CompMgr:
                 comp._uniqNum = cls.getUniqNum()
                 cls.StoreComp(comp)
                 cls._allUniqComp[h_args] = comp
+
+                cls._FLAG_INSTANTIATED = State.NotFound
             
             elif cls._FLAG_INSTANTIATED == State.Simailar:
                 uniqNum = comp._uniqNum

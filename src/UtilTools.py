@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from src.log import StandardLogger
+
 from .Comp import Paras
 from .GlobalData import DEFVAL, ReBarArea, ReBarType
 from .Paras import HRectSectParas, HRoundSectParas, SRoundSectParas
@@ -700,11 +702,12 @@ class BarsTools:
             r_res = BarsTools.calcBarsArea([Ns_Upper], [[As_min]*len(Ns_Upper)]) / sectArea
 
             Ns_res = Ns_Upper
-            As_res = As_min
+            As_res = [As_min]
 
             while True:
                 try:
                     As_ = next(f)
+                    # print(As_)
                     r_lower = BarsTools.calcBarsArea([Ns_Lower], [As_]) / sectArea
 
                     if (r_lower - r) > 0 and (r_res - r) > 0:
@@ -716,12 +719,16 @@ class BarsTools:
                             r_res = r_lower
                             Ns_res = Ns_Lower
                             As_res = As_
+                        
                     elif (r_lower - r) < 0 and (r_res -r) < 0:
                         break
 
                 except:
-                    print("An error occurred while searching for the closest target reinforcement ratio {}\nThe result has been set to r:{}\tNs:{}\tAs{}".format(r, r_res, Ns_res, As_res))
+                    msg = ("An error occurred while searching for the closest target reinforcement ratio {}\nThe result has been set to r:{}\tNs:{}\tAs{}".format(r, r_res, Ns_res, As_res))
+                    StandardLogger.warning(msg)
+                    # raise Exception(msg)
                     break
+                # print(As_res)
 
             return ([r_res], [Ns_res], [As_res])
 

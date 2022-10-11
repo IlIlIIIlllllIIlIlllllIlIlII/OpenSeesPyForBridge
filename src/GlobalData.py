@@ -52,7 +52,7 @@ class DEFVAL:
     @classmethod
     @property
     def _G_(cls):
-        return Unit.ConvertToBaseUnit(9.80665, 'm/s/s')
+        return Unit.ConvertToBaseUnit(1e-10, 'm/s/s')
 
     # * 默认钢筋间距
     @classmethod
