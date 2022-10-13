@@ -1,11 +1,11 @@
-from ast import arg
-from http.client import FOUND
+from abc import ABCMeta, abstractmethod
+from enum import Enum
+
 import numpy as np
 import openseespy.opensees as ops
-from abc import ABCMeta, abstractmethod
+
 from .GlobalData import DEFVAL
 from .log import *
-
 
 
 # * 构件类 基础类，所有的类都有该类派生
@@ -41,43 +41,87 @@ class Component(metaclass=ABCMeta):
     def attr(self):
         return [self._type, self._name, self._uniqNum]
 # class CompCategory:
-class State:
+class UniqCompState(Enum):
     Found = 1
     Simailar = 2
     NotFound = 3
     
+class DimensionAndNumberEnum(Enum):
+    BeamColunm = 1
+    Brick = 2
+
 class CompMgr:
+
+    # @classmethod
+    # def __init__(cls) -> None:
+    OpsCommandLogger.info('ops.model(\'{}\', \'{}\', {}, \'{}\', {})'.format("basic", "-ndm", 3, "-ndf", 6))
+    ops.model('basic', '-ndm', 3, '-ndf', 6)
+    
+    _NdmNdf = DimensionAndNumberEnum.BeamColunm
     _uniqNum = 0
     _compDic: dict[int:Component] = {}
-    _FLAG_INSTANTIATED = State.NotFound
-    _allUniqComp = {}
+    _FLAG_INSTANTIATED = UniqCompState.NotFound
+    _allUniqComp:dict[int:Component] = {}
 
     _allOtherComp: list[Component] = []
     _allOpsObject:list = []
     _allPart:list = []
 
-    OpsCommandLogger.info('ops.model(\'{}\', \'{}\', {}, \'{}\', {})'.format("basic", "-ndm", 3, "-ndf", 6))
-    ops.model("basic", "-ndm", 3, "-ndf", 3)
+    @classmethod
+    def NdmNdfSwitcher(cls, NdmNdf):
+        if cls._NdmNdf == NdmNdf:
+            pass
+        elif NdmNdf == DimensionAndNumberEnum.BeamColunm:
+            OpsCommandLogger.info('ops.model(\'{}\', \'{}\', {}, \'{}\', {})'.format("basic", "-ndm", 3, "-ndf", 6))
+            ops.model('basic', '-ndm', 3, '-ndf', 6)
+            cls._NdmNdf = NdmNdf
+        elif NdmNdf == DimensionAndNumberEnum.Brick:
+            OpsCommandLogger.info('ops.model(\'{}\', \'{}\', {}, \'{}\', {})'.format("basic", "-ndm", 3, "-ndf", 3))
+            ops.model('basic', '-ndm', 3, '-ndf', 3)
+            cls._NdmNdf = NdmNdf
+        else:
+            msg = "Unsupported NdmNdf type:{}".format(NdmNdf)
+            StandardLogger.warning(msg)
 
     @classmethod
     def _new(cls, func):
         # * 用于装饰__new__ 函数, 当_allUniqComp中存在相同实例是,返回该实例,并将_FLAG_INSTANTIATED置为True
         def warpper(*args, **kwargs):
             c:Component = args[0]
-            h_args = hash(str(args[1:])+str(c.__class__))
-            h_kwargs = hash(str(kwargs)+str(c.__class__))
-            if h_args in cls._allUniqComp:
-                comp:Component = cls._allUniqComp[h_args]
-                if comp._kwargsHash == h_kwargs:
-                    cls._FLAG_INSTANTIATED = State.Found
+            StandardLogger.debug("args:"+str(args[1:]))
+            h_args = hash(str(args[1:]))
+            StandardLogger.debug("kwargs:"+str(kwargs))
+            h_kwargs = hash(str(kwargs))
+            for key, comp in cls._allUniqComp.items():
+                if isinstance(comp, c) and comp._argsHash == h_args and comp._kwargsHash == h_kwargs:
+
+                    StandardLogger.debug("found")
+                    cls._FLAG_INSTANTIATED = UniqCompState.Found
                     return cls._allUniqComp[h_args]
-                else:
-                    cls._FLAG_INSTANTIATED = State.Simailar
+                elif isinstance(comp, c) and comp._argsHash == h_args:
+                    StandardLogger.debug("simailar")
+                    cls._FLAG_INSTANTIATED = UniqCompState.Simailar
                     return cls._allUniqComp[h_args]
+
+            StandardLogger.debug("not found")
+            cls._FLAG_INSTANTIATED = UniqCompState.NotFound
+            return func(c)
+            # if h_args in cls._allUniqComp:
+            #     comp:Component = cls._allUniqComp[h_args]
+            #     if comp._kwargsHash == h_kwargs:
+            #         StandardLogger.debug("found")
+            #         cls._FLAG_INSTANTIATED = UniqCompState.Found
+            #         return cls._allUniqComp[h_args]
+            #     else:
+            #         StandardLogger.debug("simailar")
+            #         cls._FLAG_INSTANTIATED = UniqCompState.Simailar
+            #         return cls._allUniqComp[h_args]
                 
-            else:
-                cls._FLAG_INSTANTIATED = State.NotFound
-                return func(c)
+            # else:
+
+            #     StandardLogger.debug("not found")
+            #     cls._FLAG_INSTANTIATED = UniqCompState.NotFound
+            #     return func(c)
         
         return warpper
                 
@@ -89,13 +133,15 @@ class CompMgr:
         def Wrapper(*args, **kwargs):
             comp:Component = args[0]
 
-            h_args = hash(str(args[1:])+str(comp.__class__))
-            h_kwargs = hash(str(kwargs)+str(comp.__class__))
+            # print("args:"+str(args[1:])
+            h_args = hash(str(args[1:]))
+            # print("kwargs:"+str(kwargs)))
+            h_kwargs = hash(str(kwargs))
 
-            if cls._FLAG_INSTANTIATED == State.Found:
-                cls._FLAG_INSTANTIATED = State.NotFound
+            if cls._FLAG_INSTANTIATED == UniqCompState.Found:
+                cls._FLAG_INSTANTIATED = UniqCompState.NotFound
 
-            elif cls._FLAG_INSTANTIATED == State.NotFound:
+            elif cls._FLAG_INSTANTIATED == UniqCompState.NotFound:
                 func(*args, **kwargs)
                 comp._argsHash = h_args
                 comp._kwargsHash = h_kwargs
@@ -103,9 +149,9 @@ class CompMgr:
                 cls.StoreComp(comp)
                 cls._allUniqComp[h_args] = comp
 
-                cls._FLAG_INSTANTIATED = State.NotFound
+                cls._FLAG_INSTANTIATED = UniqCompState.NotFound
             
-            elif cls._FLAG_INSTANTIATED == State.Simailar:
+            elif cls._FLAG_INSTANTIATED == UniqCompState.Simailar:
                 uniqNum = comp._uniqNum
                 func(*args, **kwargs)
                 comp._argsHash = h_args
@@ -113,7 +159,7 @@ class CompMgr:
                 comp._uniqNum = uniqNum
                 # cls.StoreComp(comp)
                 
-                cls._FLAG_INSTANTIATED = State.NotFound
+                cls._FLAG_INSTANTIATED = UniqCompState.NotFound
 
 
             # func(*args, **kwargs)
@@ -227,9 +273,9 @@ class CompMgr:
         # ops.wipe()
         cls._uniqNum = 0
         cls._compDic: dict[int:Component] = {}
-        cls._FLAG_INSTANTIATED = State.NotFound
-        cls._allUniqComp = {}
+        cls._FLAG_INSTANTIATED = UniqCompState.NotFound
 
+        cls._allUniqComp = {}
         cls._allOtherComp: list[Component] = []
         cls._allOpsObject:list = []
         cls._allPart:list = []

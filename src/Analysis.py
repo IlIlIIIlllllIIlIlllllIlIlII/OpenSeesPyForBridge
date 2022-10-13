@@ -1,25 +1,20 @@
 from dataclasses import dataclass
-from tracemalloc import StatisticDiff
+from enum import Enum
+# from tracemalloc import StatisticDiff
 # from email import message
 # from multiprocessing import pool
 # from sys import flags
 # from tracemalloc import StatisticDiff
 from typing import overload
-import numpy as np
+
 import matplotlib.pyplot as plt
-from enum import Enum
+import numpy as np
 import openseespy.opensees as ops
 
-
-from . import UtilTools
-from . import Comp
-from . import Load
-from . import OpsObject
-from . import Part
-from . import GlobalData
-from . import Boundary
+from . import Boundary, Comp, GlobalData, Load, OpsObject, Part, UtilTools
 from .log import *
 from .Unit import ConvertToBaseUnit
+
 
 class ConstraintsEnum(Enum):
     Plain = 'Plain'
@@ -250,6 +245,7 @@ class NodeRst:
     def ratz(self):
         return self._rst[1]
 
+
 class EleRst:
     def __init__(self, ele:OpsObject.OpsLineElement) -> None:
         ...
@@ -285,8 +281,9 @@ class AnalsisModel(Comp.Component):
     #     return wapper
     # class Res        
 
+
     @classmethod
-    def AnalysInit(cls):
+    def InitAnalsis(cls):
         Comp.CompMgr.clearComp()
         OpsCommandLogger.info('ops.wipe()')
         ops.wipe()
@@ -305,8 +302,10 @@ class AnalsisModel(Comp.Component):
         cls._CustomPatternList:list = []
         cls._StaticPattern = OpsObject.OpsPlainLoadPattern()
         cls._DynamicPattern = OpsObject.OpsMSELoadPattern()
+
         cls._FEMBuilt = False
         cls._AnalsyFinshed = False
+    
 
     @classmethod
     def StoreBoundary(cls, key:Comp.Parts, boundary:Comp.Boundary):
@@ -375,6 +374,8 @@ class AnalsisModel(Comp.Component):
 
             return False
 
+        cls._FEMBuilt = False
+
         return True
 
     @classmethod
@@ -387,6 +388,7 @@ class AnalsisModel(Comp.Component):
         for key, val in cls._BoundaryDict.items():
             for boundary in val:
                 if isinstance(boundary, Boundary.BridgeFullPileSoilBoundary) and not boundary._activated:
+                    StandardLogger.info("Full PileSoil Boundary activated")
                     x, y, z = boundary._activate()
                     cls._CuboidsList += boundary._SoilCuboids
                     ExpandBoudary += x
@@ -510,9 +512,29 @@ class AnalsisModel(Comp.Component):
     @classmethod
     def buildFEM(cls):
         cls.buildBoundary()
-        eles = cls.Inquire.AllElements
-        for ele in eles:
-            ele.uniqNum
+        # eles = cls.Inquire.AllElements
+        # for ele in eles:
+        #     ele.uniqNum
+        eles:list[OpsObject.OpsElement] = []
+        for seg in cls._SegmentList:
+            eles += seg.ELeList
+
+        for ele in cls._SpecialElementList:
+            eles.append(ele)
+        
+        Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.BeamColunm)
+        for e in eles:
+            e.uniqNum
+        
+        eles:list[OpsObject.OpsElement] = []
+        for Cubo in cls._CuboidsList:
+            eles += Cubo._Elements.flatten().tolist()
+        
+        Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.Brick)
+        for e in eles:
+            e.uniqNum
+        Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.BeamColunm)
+
         cls._FEMBuilt = True
      
     @classmethod
@@ -532,7 +554,7 @@ class AnalsisModel(Comp.Component):
         # if Analsis._Gravity:
         #     Analsis._StaticPattern.uniqNum
         #     Analsis._Gravity[0].ApplyLoad()
-            ops.reactions()
+            # ops.reactions()
             OpsCommandLogger.info('ops.constraints(*{})'.format(analysParam.constraints))
             ops.constraints(*analysParam.constraints)
             
@@ -664,7 +686,7 @@ class AnalsisModel(Comp.Component):
         ops.wipeAnalysis()
         OpsCommandLogger.info('ops.loadConst(\'{}\', {})'.format('-time', 0.0))
         ops.loadConst('-time', 0.0)
-        freq = ops.eigen('-fullGenLapack', 1)[0] ** 0.5
+        # freq = ops.eigen('-fullGenLapack', 1)[0] ** 0.5
         # ops.rayleigh(0, 0, 0, 2*analysParam.damp/freq)
         ops.rayleigh(0.0, 0.0, 0.0, 0.0000625)
         if not cls._FEMBuilt:

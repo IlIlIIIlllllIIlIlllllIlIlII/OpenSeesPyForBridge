@@ -1,12 +1,11 @@
-import numpy as np
 import time
 from abc import abstractmethod
-from . import Comp
-from . import Part
-from . import OpsObject
-from . import UtilTools
-from . import Paras
-from . import GlobalData
+
+import numpy as np
+
+from src.log import StandardLogger
+
+from . import BridgeParas, Comp, GlobalData, OpsObject, Part, UtilTools
 
 # class Boundary(Comp.Parts, metaclass=ABCMeta):
 #     @abstractmethod
@@ -25,7 +24,10 @@ class BridgeFixedBoundary(Comp.Boundary):
         super(BridgeFixedBoundary, self).__init__(name)
         self._type += "->FixedBoundary"
         self._node = node
+        # if len(fixDOFs) == 6:
         self._fixDOFs= fixDOFs
+        # else:
+        #     raise Exception("wrong fixDofs:{}, the length of fixDOFs list should be 6".format(fixDOFs))
         self._OpsFix = None
      
     def _SectReBuild(self):
@@ -76,7 +78,7 @@ class BridgeBearingBoundary(Comp.Boundary):
         if UtilTools.Util.isOnlyHas(DOFs, [0, 1], flatten=True):
             self._DOFs = DOFs
         else:
-            raise Exception("Wrong Params")
+            raise Exception("Wrong Params DOFs{}".format(DOFs))
         # self._zMats = []
         # for i, val in enumerate(dirt):
         #     if val == 1:
@@ -131,7 +133,7 @@ class BridgeEQDOFSBoundary(Comp.Boundary):
 
 class BridgeSimplePileSoilBoundary(Comp.Boundary):
     @Comp.CompMgr()
-    def __init__(self, nodeI:Part.BridgeNode, nodeJ:Part.BridgeNode, soil:Paras.SoilParas, pileD, Cu, pileEnd=False, h=None, name=""):
+    def __init__(self, nodeI:Part.BridgeNode, nodeJ:Part.BridgeNode, soil:BridgeParas.SoilParas, pileD, Cu, pileEnd=False, h=None, name=""):
         super().__init__(name)
         self._type += 'Bridge Pile-Soil Interaction Boundary'
         self._NodeI = nodeI
@@ -150,7 +152,7 @@ class BridgeSimplePileSoilBoundary(Comp.Boundary):
         # if self._activated:
         #     return
         # self
-        paras:Paras.ClayParas = self._soil
+        paras:BridgeParas.ClayParas = self._soil
         gamma = paras.rho * GlobalData.DEFVAL._G_
         z = self._z
         if paras.clayType == 'SoftClay':
@@ -206,7 +208,7 @@ class BridgeSimplePileSoilBoundary(Comp.Boundary):
 
 class BridgeFullPileSoilBoundary(Comp.Boundary):
     @Comp.CompMgr()
-    def __init__(self, pileSeg_: list[Part.LineSRoundSeg], soilMaterial:Paras.SandParas, soilHalfL_:list[float]=None, soilHalfW_:list[float]=None, soilHalfH_:list[float]=None, name=""):
+    def __init__(self, pileSeg_: list[Part.LineSRoundSeg], soilMaterial:BridgeParas.SandParas, soilHalfL_:list[float]=None, soilHalfW_:list[float]=None, soilHalfH_:list[float]=None, name=""):
         super().__init__(name)
         self._type += 'Bridge Full Pile Soil Boundary'
         self._pileSegs = pileSeg_
@@ -223,8 +225,10 @@ class BridgeFullPileSoilBoundary(Comp.Boundary):
     def _activate(self):
         # if self._activated:
         #     return
+        Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.Brick)
+            
         if len(self._pileSegs) == 1:
-            paras:Paras.SRoundSectParas = self._pileSegs[0]._Secti
+            paras:BridgeParas.SRoundSectParas = self._pileSegs[0]._Secti
             r = paras.R
 
             soilH = sum(self._SoilH)
@@ -233,6 +237,9 @@ class BridgeFullPileSoilBoundary(Comp.Boundary):
             segH = sum(self._pileSegs[0].EleLength)
 
             x0t, y0t, z0t = self._pileSegs[0]._BridgeNodeI.point
+            x0t -= GlobalData.DEFVAL._COOROFFSET_
+            y0t -= GlobalData.DEFVAL._COOROFFSET_
+            z0t -= GlobalData.DEFVAL._COOROFFSET_
 
             xdt, ydt, zdt = x0t+r, y0t+r, z0t
             xct, yct, zct = x0t+r, y0t-r, z0t
@@ -259,7 +266,7 @@ class BridgeFullPileSoilBoundary(Comp.Boundary):
             |
             |x
 
-            #------------|#----|#------------ 
+            #-------------#-----#------------ 
             |    block3  |  2  | block1     |                       ________________________   ___
             |            |     |            |                                 | |               |
             #-----------%|#b-a%|#-----------%                       ----------|-|-----------    |
@@ -267,7 +274,7 @@ class BridgeFullPileSoilBoundary(Comp.Boundary):
             #-----------%|#c-d%|#-----------%   ^                   ----------|-|-----------    |
             |            |     |            |   |                   __________|_|___________   _|_
             |    block5  |  6  | block7     |   soilL                         | |               |
-            ----------5-%|----%|------------%  _|_                  __________|_|___________    soilH
+            ----------5-%l----%l------------%  _|_                  __________|_|___________    soilH
                                                                               | |               |
             |<---------->|--d--|<---soilW-->|                       __________|_|___________   _|_
             """
@@ -367,6 +374,9 @@ class BridgeFullPileSoilBoundary(Comp.Boundary):
                 if flag:
                     ns:list[Part.BridgeNode] = val.flatten().tolist()
                     all_fix_node += ns
+                else:
+                    StandardLogger.warning("Can not find Bridge node in the plane of cuboid:{}, ignored".format(b._uniqNum))
+                    StandardLogger.warning("Search nodes range: p3:{}, p5:{}".format(b._Node3.point, (b._Node3.point[0]+b._L, b._Node3.point[1]+b._W, b._Node3.point[2]+0)))
 
             all_fix_des = []
             for n in all_fix_node:
@@ -389,8 +399,8 @@ class BridgeFullPileSoilBoundary(Comp.Boundary):
                             for z in range(h):
                                 bn1 = BridgeNs1[x, y, z]
                                 bn2 = BridgeNs2[x, y, z]
-                                # b = BridgeEQDOFSBoundary(bn1, bn2, [1, 1, 1, 0, 0, 0])
-                                # all_eqDof_des.append(b)
+                                b = BridgeEQDOFSBoundary(bn1, bn2, [1, 1, 1, 0, 0, 0])
+                                all_eqDof_des.append(b)
                 else:
                     raise Exception("wrong paras, can not find points or points num are not equal")
             
@@ -410,10 +420,8 @@ class BridgeFullPileSoilBoundary(Comp.Boundary):
                             for z in range(h):
                                 bn1 = BridgeNs1[x, y, z]
                                 bn2 = BridgeNs2[x, y, z]
-                                # b = BridgeEQDOFSBoundary(bn1, bn2, [1, 1, 1, 0, 0, 0])
-                                # if (-19000, -25000, -40000) in (bn1.point, bn2.point):
-                                #     print("boundary {} get".format(b._uniqNum))
-                                # all_eqDof_des.append(b)
+                                b = BridgeEQDOFSBoundary(bn1, bn2, [1, 1, 1, 0, 0, 0])
+                                all_eqDof_des.append(b)
                 else:
                     raise Exception("wrong paras")
 
@@ -421,8 +429,11 @@ class BridgeFullPileSoilBoundary(Comp.Boundary):
             # * connect soil and pile
             segBottomPoint = self._pileSegs[0]._BridgeNodeJ.point
             x, y, z = segBottomPoint
-            flag1, nodes1 = self._SoilCuboids[5].FindRangeBridgeNodes((x+r, y, z), 0, 0, abs(z))
-            flag2, nodes2 = self._SoilCuboids[7].FindRangeBridgeNodes((x, y+r, z), 0, 0, abs(z))
+            offset = GlobalData.DEFVAL._COOROFFSET_
+            flag1, nodes1 = self._SoilCuboids[5].FindRangeBridgeNodes((x+r-offset, y-offset, z-offset), 0, 0, abs(z))
+            flag2, nodes2 = self._SoilCuboids[7].FindRangeBridgeNodes((x-offset, y+r-offset, z-offset), 0, 0, abs(z))
+            # flag1, nodes1 = self._SoilCuboids[5].FuzzyFindNode((x+r+offset, y+offset, z+offset))
+            # flag2, nodes2 = self._SoilCuboids[7].FuzzyFindNode((x+offset, y+r+offset, z+offset))
 
             if flag1 and flag2 and nodes1.shape == nodes2.shape:
                 nodes1 = nodes1.flatten().tolist()
@@ -431,8 +442,8 @@ class BridgeFullPileSoilBoundary(Comp.Boundary):
                 segnodes = segnodes.reverse()
                 if len(nodes1) == len(self._pileSegs[0]._BridgeNodes):
                     for p1, p2, p in zip(nodes1, nodes2, self._pileSegs[0]._BridgeNodes):
-                        # all_connet_des.append(BridgeEQDOFSBoundary(p, p1, [1, 1, 0, 0, 0, 0] ))
-                        # all_connet_des.append(BridgeEQDOFSBoundary(p, p2, [1, 1, 0, 0, 0, 0] ))
+                        all_connet_des.append(BridgeEQDOFSBoundary(p, p1, [1, 1, 0, 0, 0, 0] ))
+                        all_connet_des.append(BridgeEQDOFSBoundary(p, p2, [1, 1, 0, 0, 0, 0] ))
                         ...
                 else:
                     raise Exception("Wrong param, nodes in pile are not equal to nodes in soil")
@@ -455,7 +466,7 @@ class BridgeFullPileSoilBoundary(Comp.Boundary):
             #     if not flag:
             #         raise Exception("Can not find point:{} in block 8".format(p))
             #     all_connet_des.append(BridgeEQDOFSBoundary(bridgeN, n, [1, 1, 0, 0, 0, 0] ))
+        self._activated = True
+        Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.Brick)
             
-            self._activated = True
-            
-            return all_fix_des, all_eqDof_des, all_connet_des
+        return all_fix_des, all_eqDof_des, all_connet_des

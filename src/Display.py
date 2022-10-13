@@ -1,16 +1,20 @@
 #%%
 from enum import Enum
-from unittest import defaultTestLoader
-from src.Analysis import AnalsisModel
-from src.Boundary import BridgeBearingBoundary, BridgeEQDOFSBoundary, BridgeFixedBoundary
 
-from src.Comp import Boundary
-from . import Part
 import matplotlib.pyplot as plt
+import numpy as np
 #! Using it to draw 3d graphics does not perform well, consider using other 3D drawing librarie or improve the performance
 from mpl_toolkits.mplot3d import Axes3D
-from . import UtilTools
-import numpy as np
+
+from src import OpsObject
+from src.log import StandardLogger
+
+from . import Part, UtilTools
+from .Analysis import AnalsisModel
+from .Boundary import (BridgeBearingBoundary, BridgeEQDOFSBoundary,
+                       BridgeFixedBoundary)
+from .Comp import Boundary, OpsObj
+
 #%%
 
 class DisplayProf:
@@ -64,14 +68,42 @@ class DisplayProf:
         self._BoundaryColor = BoundaryColor
 
 class ModelDisplayer:
+    @property
+    def Figure3D(self):
+        if self.fig3d == None:
+            self.fig3d = plt.figure()
+        return self.fig3d
+
+    @property
+    def Ax3D(self):
+        if self.ax3d == None:
+            self.ax3d = self.Figure3D.add_subplot(1, 1, 1, projection='3d')
+            # self.ax3d = plt.axes(projection='3d')
+            self.ax3d.set_xlabel("X")
+            self.ax3d.set_ylabel("Y")
+            self.ax3d.set_zlabel("Z")
+        return self.ax3d
+    
+    @property
+    def Figure2D(self):
+        if self.fig2d == None:
+            self.fig2d = plt.figure(figsize=(4, 4))
+        return self.fig2d
+    @property
+    def Ax2D(self):
+        if self.ax2d == None:
+            self.ax2d = self.Figure2D.add_subplot(1, 1, 1)
+        return self.ax2d
 
     def __init__(self, displayProf=None) -> None:
         plt.ion()
-        self.fig = plt.figure()
-        self.ax = plt.axes(projection='3d')
-        self.ax.set_xlabel("X")
-        self.ax.set_ylabel("Y")
-        self.ax.set_zlabel("Z")
+        self.fig3d = None
+        self.ax3d = None
+
+        self.fig2d = None
+        self.ax2d = None
+
+
         if not displayProf:
             displayProf = DisplayProf()
         self._DisProf = displayProf
@@ -87,7 +119,7 @@ class ModelDisplayer:
         if not marker:
             marker = '.'
 
-        self.ax.scatter3D(points[0], points[1], points[2], c=c, s=s, marker=marker)
+        self.Ax3D.scatter3D(points[0], points[1], points[2], c=c, s=s, marker=marker)
 
     def Plot3DLine(self, p1, p2, LineW=None, LineC=None, lineStyle=None):
         new = []
@@ -99,7 +131,7 @@ class ModelDisplayer:
             LineC = self._DisProf._LineColor
         if not lineStyle:
             lineStyle = '-'
-        self.ax.plot3D(new[0], new[1], new[2], linewidth=LineW, c=LineC, linestyle=lineStyle)
+        self.Ax3D.plot3D(new[0], new[1], new[2], linewidth=LineW, c=LineC, linestyle=lineStyle)
         
     def PlotSurface(self, p1, p2, p3, p4, color=None):
         v1 = UtilTools.PointsTools.VectorSub(p2, p1)
@@ -116,7 +148,7 @@ class ModelDisplayer:
             if not color:
                 color = self._DisProf._SurfaceColor                
 
-            self.ax.plot_surface(x, y, z, color=color)
+            self.Ax3D.plot_surface(x, y, z, color=color)
         else:
             print('Points are not in one plane')
 
@@ -260,8 +292,84 @@ class ModelDisplayer:
             self.PlotSegment(seg)
         for coub in anayModel._CuboidsList:
             self.PlotCuboid(coub, self._DisProf._CuboidMode)
+    
+    @staticmethod
+    def CircPath(p, r, theta1, theta2, n):
+        # deltaTheta = (theta2 - theta1)/n
+
+        x = np.array([r * np.cos(theta*2*np.pi/360) for theta in np.linspace(theta1, theta2, n)])
+        x += p[0]
+        y = np.array([r * np.sin(theta*2*np.pi/360) for theta in np.linspace(theta1, theta2, n)])
+        y += p[1]
+
+        return x, y
+
+    @staticmethod
+    def LinePath(p1, p2, n):
+        # dx = (p2[0] - p1[0]) / n
+        # dy = (p2[1] - p1[1]) / n
+        # if UtilTools.Util.TOL_EQ(dx, 0):
+        #     x = np.array([p2[0]]*(n+1))
+        # else:
+        #     x = np.array([px for px in np.arange(p1[0], p2[0]+dx, dx)])
+        #     # x = p2[0]
+        # if UtilTools.Util.TOL_EQ(dy, 0):
+        #     y = np.array([p2[1]]*(n+1))
+        #     # y = p2[1]
+        # else:
+        #     y = np.array([py for py in np.arange(p1[1], p2[1]+dy, dy)])
+        x = np.linspace(p1[0], p2[0], n)
+        y = np.linspace(p1[1], p2[1], n)
+        return x, y
+
+    def PlotFiberSect(self, ele:OpsObject.OpsLineElement):
+        if isinstance(ele.Sect, OpsObject.OpsFiberSection):
+            fs = ele.Sect._FibersDistr
+
+        # self.Figure3D.set_size_inches(4, 4)
+
+        for p in fs.Points:
+            if isinstance(p, OpsObject.FiberCircPoint):
+                x, y = ModelDisplayer.CircPath(p.centerP, p.r, p.angle[0], p.angle[1], p.n)
+                self.Ax2D.scatter(x, y, s=p.area/20)
+
+            elif isinstance(p, OpsObject.FiberLinePoint):
+                x, y = ModelDisplayer.LinePath(p.p1, p.p2, p.n)
+                self.Ax2D.scatter(x, y, s=p.area/20)
+        for p in fs.Surface:
+            if isinstance(p, OpsObject.FiberCirc):
+                if p.r[1] == 0:
+                    StandardLogger.warning("the out Rad is 0, ignored")
+                    return
+
+                xout, yout = ModelDisplayer.CircPath(p.centerP, p.r[1], p.angle[0], p.angle[1], p.FiberSize[0])
+                self.Ax2D.plot(xout, yout)
+
+                if p.r[0] == 0:
+                    self.Ax2D.fill(x1, y1)
+                    for x1, y1 in zip(xout, yout):
+                        self.Ax2D.plot(x1, y1)
+                    
+                
+                else:
+                    xin, yin = ModelDisplayer.CircPath(p.centerP, p.r[0], p.angle[0], p.angle[1], p.FiberSize[0])
+                    self.Ax2D.plot(xin, yin)
+                    for x1, y1, x2, y2 in zip(xin, yin, xout, yout):
+                        lpx, lpy = ModelDisplayer.LinePath((x1, y1), (x2,y2), p.FiberSize[1])
+                        self.Ax2D.plot(lpx, lpy)
+            elif isinstance(p, OpsObject.FiberQuad):
+                xin, yin = ModelDisplayer.LinePath(p.p1, p.p2, p.FiberSize[0])
+                xout, yout = ModelDisplayer.LinePath(p.p4, p.p3, p.FiberSize[0])
+                self.Ax2D.plot(xin, yin)
+                self.Ax2D.plot(xout, yout)
+
+                for x1, y1, x2, y2 in zip(xin, yin, xout, yout):
+                    lpx, lpy = ModelDisplayer.LinePath((x1, y1), (x2, y2))
+                    self.Ax2D.plot(lpx, lpy)
 
 
+
+                    
             
 
 

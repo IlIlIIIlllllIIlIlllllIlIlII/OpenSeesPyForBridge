@@ -1,19 +1,13 @@
 # * OpsObj类不需要有Getter和setter
-from abc import ABC, ABCMeta, abstractmethod
-from asyncio import protocols
-from dataclasses import make_dataclass
-from symbol import factor
-from tkinter import dialog
-from xml.dom.minidom import Element
+from abc import ABCMeta, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
+from sys import flags
+
 import numpy as np
 import openseespy.opensees as ops
-from enum import Enum
 
-from src import Paras
-
-from . import Comp
-from . import GlobalData
-from . import UtilTools
+from . import BridgeParas, Comp, GlobalData, UtilTools
 from .log import *
 
 # * 桥梁节点类 表示有限元节点
@@ -52,22 +46,22 @@ class OpsNode(Comp.OpsObj):
     #     return "({}, {}, {})".format(self._xyz[0], self._xyz[1], self._xyz[2])
 
 class OpsMass(Comp.OpsObj):
-    def __init__(self, node:OpsNode, mass:float, dof:list[int]=[0,0,-1,0,0,0], name=""):
+    def __init__(self, node:OpsNode, mass:float, dof:list[int]=[0, 0, -1], name=""):
         super(OpsMass, self).__init__(name)
         self._type += '->Ops Mass'
         self._Node = node
         self._mass = float(mass)
-        if len(dof) == 6 and UtilTools.Util.isOnlyHas(dof, [0, 1, -1], flatten=True):
+        if UtilTools.Util.isOnlyHas(dof, [0, 1, -1], flatten=True):
             self._massDof = dof
         else:
-            self._massDof = [1,1,1,0,0,0]
+            self._massDof = [1,1,1]
         
         self._create()
     
     def _create(self):
-        OpsCommandLogger.info('ops.mass({}, {}, {}, {}, {}, {}, {})'.format(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2], self._mass*self._massDof[3], self._mass*self._massDof[4], self._mass*self._massDof[5]))
+        OpsCommandLogger.info('ops.mass({}, {}, {})'.format(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2]))
 
-        ops.mass(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2], self._mass*self._massDof[3], self._mass*self._massDof[4], self._mass*self._massDof[5])
+        ops.mass(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2])
 
     @property
     def val(self):
@@ -89,8 +83,8 @@ class OpsFix(OpsBoundary):
     def __init__(self, node: OpsNode, fixlist:list[int] , name=""):
         super(OpsFix, self).__init__(node, name)
         self._type = '->Ops Fixed Boundary'
-        if len(fixlist) != 6 and not UtilTools.Util.isOnlyHas(fixlist, [1, 0], flatten=True):
-            raise Exception("Wrong Paras:{}".format(fixlist))
+        if len(fixlist) != 3 and not UtilTools.Util.isOnlyHas(fixlist, [1, 0], flatten=True):
+            raise Exception("Wrong FixVal:{}".format(fixlist))
 
         self._fix = fixlist
         self._create()
@@ -104,7 +98,7 @@ class OpsFix(OpsBoundary):
 
     def _create(self):
         OpsCommandLogger.info('ops.fix({}, *{})'.format(self._node.uniqNum, self._fix))
-        print("FIXED")
+        # print("FIXED")
         ops.fix(self._node.uniqNum, *self._fix)
 
 class OpsEqualDOF(Comp.OpsObj):
@@ -113,7 +107,10 @@ class OpsEqualDOF(Comp.OpsObj):
         self._type += '-> Ops Equal DOF'
         self._NodeI = nodeI
         self._NodeJ = nodeJ
+        # if len(dofs) == 3:
         self._dofs = dofs
+        # else:
+            # raise Exception('Wrong equalDofs:{}'.format(dofs))
         self._create()
     
     def _create(self):
@@ -418,14 +415,79 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, name=""):
         super(OpsSection, self).__init__(name)
-        self._type += "->Bridge Cross Section"
+        self._type += "->Ops Cross Section"
 
     @abstractmethod
     def _create(self):
         ...
+@dataclass
+class FiberLinePoint:
+    n:int
+    area:float
+    #*          x     y
+    p1:tuple[float, float]
+    #*          x     y
+    p2:tuple[float, float]
 
-    @staticmethod
-    def RectRebarFiber(p1: tuple, p2: tuple, m:OpsUniaxialMaterial, area: GlobalData.ReBarArea, n: int):
+@dataclass
+class FiberCircPoint:
+    r:float
+    #*          start   end
+    angle:tuple[float, float]
+    n:int
+    area:float
+    #*              x     y
+    centerP:tuple[float, float]
+
+@dataclass
+class FiberQuad:
+    #*          x     y
+    p1:tuple[float, float]  
+    #*          x     y
+    p2:tuple[float, float]  
+    #*          x     y
+    p3:tuple[float, float]  
+    #*          x     y
+    p4:tuple[float, float]  
+    #*              nX    nY
+    fiberSize:tuple[int, int]
+
+
+@dataclass
+class FiberCirc:
+    #*              nCir nRad
+    FiberSize:tuple[int, int]
+    #*              x    y
+    centerP:tuple[int, int]
+    #*       rin    rout
+    r:tuple[float, float]
+    #*          start   end
+    angle:tuple[float, float]
+    
+
+@dataclass
+class FibersDistr:
+    Points:list[FiberLinePoint] 
+    Surface:list[FiberCirc]
+
+    def AddPoint(self, p):
+        self.Points.append(p)
+    
+    def AddSurface(self, s):
+        self.Surface.append(s)
+
+class OpsFiberSection(OpsSection):
+    @abstractmethod
+    def __init__(self, name=""):
+        super().__init__(name)
+        self._type += '->Ops Fiber Section'
+        self._FibersDistr:FibersDistr = FibersDistr([], [])
+    
+    @abstractmethod
+    def _create(self):
+        ...
+
+    def RectRebarFiber(self, p1: tuple, p2: tuple, m:OpsUniaxialMaterial, area: GlobalData.ReBarArea, n: int):
         if n == 1:
             return
         np1 = np.array(p1)
@@ -435,16 +497,18 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         np1 = list(np1)
         np2 = list(np2)
         OpsCommandLogger.info('ops.layer({}, {}, {}, {}, {}, {}, {})'.format(m.uniqNum, n, area.value, float(np1[0]), float(np1[1]), np2[0], np2[1]))
+        fiberp = FiberLinePoint(n, area.value, (float(np1[0]), float(np2[0])), (np2[0], np2[1]))
         ops.layer( "straight", m.uniqNum, n, area.value, float(np1[0]), float(np1[1]), np2[0], np2[1])
+        self._FibersDistr.AddPoint(fiberp)
 
-    @staticmethod
-    def RoundRebarFiberBuild(r:float, m:OpsUniaxialMaterial, area:GlobalData.ReBarArea, n:int):
+    def RoundRebarFiberBuild(self, r:float, m:OpsUniaxialMaterial, area:GlobalData.ReBarArea, n:int):
+        fiberp = FiberCircPoint(r, (0,360), n, area.value, (0, 0))
+        self._FibersDistr.AddPoint(fiberp)
         ops.layer("circ", m.uniqNum, n, area.value, 0, 0, r)
         message = 'ops.layer("circ", {}, {}, {}, 0, 0, {})'.format(m.uniqNum, n, area.value, r)
         OpsCommandLogger.info(message)
 
-    @staticmethod
-    def HRectConcreteFiberBuild(w:float, l:float, t:float, m:OpsUniaxialMaterial, fibersize:tuple[int, ...]):
+    def HRectConcreteFiberBuild(self, w:float, l:float, t:float, m:OpsUniaxialMaterial, fibersize:tuple[int, ...]):
         
         # patch('rect', matTag, numSubdivY, numSubdivZ, *crdsI, *crdsJ)
         p1 = (w / 2, l / 2)
@@ -463,21 +527,28 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         ops.patch("rect", m.uniqNum, *fibersize, *p1, *p22)
         message = message.format(m.uniqNum, *fibersize, *p1, *p22)
         OpsCommandLogger.info(message)
+        surface = FiberQuad(p1, (p1[0], p22[1]), p22, (p22[0], p1[1]), fibersize)
+        self._FibersDistr.AddSurface(surface)
 
         ops.patch("rect", m.uniqNum, *fibersize, *p2, *p33)
         message = message.format(m.uniqNum, *fibersize, *p2, *p33)
         OpsCommandLogger.info(message)
+        surface = FiberQuad(p2, (p2[0], p33[1]), p33, (p33[0], p2[1]), fibersize)
+        self._FibersDistr.AddSurface(surface)
 
         ops.patch("rect", m.uniqNum, *fibersize, *p3, *p44)
         message = message.format(m.uniqNum, *fibersize, *p3, *p44)
         OpsCommandLogger.info(message)
+        surface = FiberQuad(p3, (p3[0], p44[1]), p44, (p44[0], p3[1]), fibersize)
+        self._FibersDistr.AddSurface(surface)
 
         ops.patch("rect", m.uniqNum, *fibersize, *p4, *p11)
         message = message.format(m.uniqNum, *fibersize, *p4, *p11)
         OpsCommandLogger.info(message)
+        surface = FiberQuad(p4, (p4[0], p11[1]), p11, (p11[0], p4[1]), fibersize)
+        self._FibersDistr.AddSurface(surface)
 
-    @staticmethod
-    def RoundConcreteFiberBuild(Rin:float, Rout:float, m:OpsUniaxialMaterial, fiberSize:tuple[int, ...]):
+    def RoundConcreteFiberBuild(self, Rin:float, Rout:float, m:OpsUniaxialMaterial, fiberSize:tuple[int, ...]):
         # patch('circ', matTag, numSubdivCirc, numSubdivRad, *center, *rad, *ang)
         Circ, Rad = fiberSize
         nRad = int(round((Rout-Rin)/Circ, 0))
@@ -489,6 +560,8 @@ class OpsSection(Comp.OpsObj, metaclass=ABCMeta):
         ops.patch("circ", m.uniqNum, nCirc, nRad, 0, 0, Rin, Rout, 0, 360)
         message = 'ops.patch("circ", {}, {}, {}, 0, 0, {}, {}, 0, 360)'.format(m.uniqNum, nCirc, nRad, Rin, Rout)
         OpsCommandLogger.info(message)
+        surface = FiberCirc((nCirc, nRad), (0, 0), (Rin, Rout), (0, 360))
+        self._FibersDistr.AddSurface(surface)
 
 
 class OpsBoxSection(OpsSection):
@@ -512,7 +585,7 @@ class OpsBoxSection(OpsSection):
             OpsCommandLogger.info('ops.section( "Elastic", {}, {}, {}, {}, {}, {}, {})'.format(self._uniqNum, self._material._E, self._attr["area"], self._attr['inertia_x'], self._attr['interia_y'], self._material._G, self._attr['interia_j']))
             ops.section( "Elastic", self._uniqNum, self._material._E, self._attr["area"], self._attr['inertia_x'], self._attr['interia_y'], self._material._G, self._attr['interia_j'])
 
-class OpsHRoundFiberSection(OpsSection):
+class OpsHRoundFiberSection(OpsFiberSection):
 
     """
     """
@@ -523,7 +596,7 @@ class OpsHRoundFiberSection(OpsSection):
         R_out:float,
         R_in:float,
         sectAttr:dict,
-        rebarsDistr:Paras.SectRebarDistrParas,
+        rebarsDistr:BridgeParas.SectRebarDistrParas,
         conCover:OpsConcrete02,
         conCore:OpsConcrete02 = None,
         rebar:OpsSteel02 = None,
@@ -544,6 +617,8 @@ class OpsHRoundFiberSection(OpsSection):
         self._CoreCon = conCore
         self._Rebar = rebar
         self._FiberSize = fiberSize
+        
+        
     
     @property
     def val(self):
@@ -579,13 +654,14 @@ class OpsHRoundFiberSection(OpsSection):
         Rin = self._Rin
         self.RoundConcreteFiberBuild(Rin, Rout, self._CoverCon, self._FiberSize)
 
-class OpsSRoundFiberSection(OpsSection):
+
+class OpsSRoundFiberSection(OpsFiberSection):
     @Comp.CompMgr()
     def __init__(self, 
         cover:float,
         R:float,
         sectAttr:dict,
-        rebarsDistr:Paras.SectRebarDistrParas,
+        rebarsDistr:BridgeParas.SectRebarDistrParas,
         conCore:OpsConcrete02,
         conCover:OpsConcrete02,
         rebar:OpsSteel02,
@@ -630,7 +706,7 @@ class OpsSRoundFiberSection(OpsSection):
         Rin = 0
         self.RoundConcreteFiberBuild(Rin, Rout, self._CoreCon, self._FiberSize)
 
-class OpsHRectFiberSection(OpsSection):
+class OpsHRectFiberSection(OpsFiberSection):
     """
     桥墩纤维截面对象, opensees.py命令为
     ops.Section()
@@ -644,7 +720,7 @@ class OpsHRectFiberSection(OpsSection):
         length:float,
         thick:float,
         sectAttr:dict,
-        rebarsDistr:Paras.SectRebarDistrParas,
+        rebarsDistr:BridgeParas.SectRebarDistrParas,
         conCore: OpsConcrete02,
         conCover: OpsConcrete02 = None,
         rebar: OpsSteel02 = None,
@@ -737,7 +813,7 @@ class OpsLineElement(OpsElement, metaclass=ABCMeta):
         self._type += "->Ops Line Element"
         self._Node1 = node1
         self._Node2 = node2
-        self._Sect = sect
+        self._Sect:OpsSection = sect
         self._Transf = transf
 
     @property
@@ -752,6 +828,10 @@ class OpsLineElement(OpsElement, metaclass=ABCMeta):
     @abstractmethod
     def _create(self):
         ...
+
+    # def uniqNum(self):
+    #     # Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.BeamColunm)
+    #     super().uniqNum
 
 class OpsZLElement(OpsLineElement):
     __slots__ = []
@@ -816,7 +896,7 @@ class OpsEBCElement(OpsLineElement):
         return self._Sect
 
     def _create(self):
-        OpsCommandLogger.info('ops.element({}, {}, {}, {}, {}, {})'.format("elasticBeamColumn", self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._Sect.uniqNum, self._Transf.uniqNum))
+        OpsCommandLogger.info('ops.element("elasticBeamColumn", {}, {}, {}, {}, {})'.format(self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._Sect.uniqNum, self._Transf.uniqNum))
         ops.element("elasticBeamColumn", self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, self._Sect.uniqNum, self._Transf.uniqNum)
 
 class OpsNBCElement(OpsLineElement):
@@ -876,7 +956,6 @@ class OpsBrickElement(OpsElement, metaclass=ABCMeta):
     @abstractmethod
     def _create(self):
         ...
-    
     @property
     def val(self): ...
 
@@ -973,9 +1052,10 @@ class OpsPlainLoadPattern(Comp.OpsObj):
 
 class OpsMSELoadPattern(Comp.OpsObj):
     @Comp.CompMgr()
-    def __init__(self, name=""):
+    def __init__(self, name="MSELoadPattern"):
         super().__init__(name)
         self._type += '->Multi-Support Excitation Pattern'
+        StandardLogger.debug("MSE ativated")
     
     def _create(self):
         OpsCommandLogger.info('ops.pattern(\'{}\', {})'.format('MultipleSupport', self._uniqNum))
@@ -984,7 +1064,7 @@ class OpsMSELoadPattern(Comp.OpsObj):
 
 class OpsPlainLoads(Comp.OpsObj):
     @abstractmethod
-    def __init__(self, name=""):
+    def __init__(self, name="PlainLoads"):
         super().__init__(name)
         self._type += '->OpsPlainLoads'
     
@@ -1004,6 +1084,7 @@ class OpsNodeLoad(OpsPlainLoads):
     def _create(self):
         # load(nodeTag, *loadValues)
         
+        Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.Brick)
         OpsCommandLogger.info('ops.load({}, *{})'.format(self._Node.uniqNum, self._Load))
         ops.load(self._Node.uniqNum, *self._Load)
     

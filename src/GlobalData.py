@@ -1,10 +1,11 @@
 from configparser import ConverterMapping
 from enum import Enum
-from weakref import ref
+from types import DynamicClassAttribute
 
 from . import Unit
 from .log import *
-from types import DynamicClassAttribute
+
+
 # from src import UtilTools
 class CoordinateSystem:
     @staticmethod
@@ -47,12 +48,13 @@ class DEFVAL:
     @classmethod
     @property
     def _COOROFFSET_(cls):
-        return Unit.ConvertToBaseUnit(0.01, 'mm')
+        return 1
+        # return Unit.ConvertToBaseUnit(1, 'mm')
 
     @classmethod
     @property
     def _G_(cls):
-        return Unit.ConvertToBaseUnit(1e-10, 'm/s/s')
+        return Unit.ConvertToBaseUnit(9.80665, 'm/s/s')
 
     # * 默认钢筋间距
     @classmethod

@@ -1,17 +1,15 @@
+import pathlib
+import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-import re
-import numpy as np
-import pathlib
-import openseespy.opensees as ops
-import matplotlib.pyplot as plt
 
-from . import OpsObject
-from . import GlobalData
-from . import Comp
-from . import Part
-from . import UtilTools
+import matplotlib.pyplot as plt
+import numpy as np
+import openseespy.opensees as ops
+
+from . import Comp, GlobalData, OpsObject, Part, UtilTools
 from .log import *
+
 
 class StaticLoads(Comp.Loads, metaclass = ABCMeta):
     @abstractmethod
@@ -24,10 +22,10 @@ class StaticLoads(Comp.Loads, metaclass = ABCMeta):
         ...
     
 class PointLoads(StaticLoads):
-    def __init__(self, node:Part.BridgeNode, fx=0.0, fy=0.0, fz=0.0, mx=0.0, my=0.0, mz=0.0, name=""):
+    def __init__(self, node:Part.BridgeNode, fx=0.0, fy=0.0, fz=0.0, name=""):
         super().__init__(name)
         self._type += '->PointLoads'
-        self._Load = (fx, fy, fz, mx, my, mz)
+        self._Load = (fx, fy, fz)
         self._Node:Part.BridgeNode = node
     
     def _OpsLoadBuild(self):
@@ -68,6 +66,7 @@ class Gravity(StaticLoads):
 
     def _OpsLoadBuild(self):
         if self._segList:
+            Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.BeamColunm)
             for seg in self._segList:
                 ele_ = seg.ELeList
                 mass_ = seg.MassList
@@ -77,13 +76,14 @@ class Gravity(StaticLoads):
                     OpsObject.OpsEleLoad([ele], wz=wz)
 
         if self._CuboList:
+            Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.Brick)
             for cuob in self._CuboList:
                 for i, xval in enumerate(cuob._BridgeNodes):
                     for j, yval in enumerate(xval):
                         for k, val in enumerate(yval):
                             node:Part.BridgeNode = val
                             grav = cuob._Masses[i, j, k] * GlobalData.DEFVAL._G_
-                            load = [0, 0, -grav, 0, 0, 0]
+                            load = [0, 0, -grav]
                             OpsObject.OpsNodeLoad(load, node.OpsNode)
                     
             

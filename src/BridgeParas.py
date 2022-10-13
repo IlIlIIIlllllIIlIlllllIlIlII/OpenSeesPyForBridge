@@ -1,12 +1,9 @@
-from dataclasses import dataclass
-from dbm import ndbm
-from enum import Enum
 from abc import ABCMeta, abstractmethod
-from importlib.machinery import SourceFileLoader
-from sys import float_info
+from dataclasses import dataclass
 
-from .Comp import Paras
 from . import GlobalData
+from .Comp import Paras
+
 
 class SectParas(Paras):
     @abstractmethod
@@ -642,28 +639,28 @@ class Sand:
         return SandParas(sandType='DenseSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.DenseSand))
 
 #TODO
-class BridgeParas(Paras):
-    def __init__(self, name: str = ""):
-        super(BridgeParas, self).__init__(name)
-        self.ParasDict = {
-            "L_s": 0.0,
-            "L_m": 0.0,
-            "L_0": 0.0,
-            "W_g_u": 0.0,
-            "W_g_d": 0.0,
-            "H_m": 0.0,
-            "H_p": 0.0,
-            "T_u_s": 0.0,
-            "T_d_s": 0.0,
-            "T_w_s": 0.0,
-            "T_u_m": 0.0,
-            "T_d_m": 0.0,
-            "T_w_m": 0.0,
-            "W_p_u": 0.0,
-            "L_p_u": 0.0,
-            "T_p_u": 0.0,
-            "W_p_d": 0.0,
-            "L_p_d": 0.0,
-            "T_p_d": 0.0,
-        }
-        self._type += "BridgeParas"
+# class BridgeParas(Paras):
+#     def __init__(self, name: str = ""):
+#         super(BridgeParas, self).__init__(name)
+#         self.ParasDict = {
+#             "L_s": 0.0,
+#             "L_m": 0.0,
+#             "L_0": 0.0,
+#             "W_g_u": 0.0,
+#             "W_g_d": 0.0,
+#             "H_m": 0.0,
+#             "H_p": 0.0,
+#             "T_u_s": 0.0,
+#             "T_d_s": 0.0,
+#             "T_w_s": 0.0,
+#             "T_u_m": 0.0,
+#             "T_d_m": 0.0,
+#             "T_w_m": 0.0,
+#             "W_p_u": 0.0,
+#             "L_p_u": 0.0,
+#             "T_p_u": 0.0,
+#             "W_p_d": 0.0,
+#             "L_p_d": 0.0,
+#             "T_p_d": 0.0,
+#         }
+#         self._type += "BridgeParas"

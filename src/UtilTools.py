@@ -1,11 +1,13 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from src.log import StandardLogger
+from src import BridgeParas
 
+from .BridgeParas import HRectSectParas, HRoundSectParas, SRoundSectParas
 from .Comp import Paras
 from .GlobalData import DEFVAL, ReBarArea, ReBarType
-from .Paras import HRectSectParas, HRoundSectParas, SRoundSectParas
+from .log import StandardLogger
+
 #%%
     
 
@@ -137,7 +139,7 @@ class PointsTools:
         if type(x) is not np.ndarray:
             x = np.array(x)
         
-        return x-y
+        return np.round(x-y, 3)
 
     @staticmethod
     def vectEnlarge(x:tuple, y):
@@ -702,7 +704,7 @@ class BarsTools:
             r_res = BarsTools.calcBarsArea([Ns_Upper], [[As_min]*len(Ns_Upper)]) / sectArea
 
             Ns_res = Ns_Upper
-            As_res = [As_min]
+            As_res = [As_min]*len(Ns_Upper)
 
             while True:
                 try:
@@ -724,7 +726,7 @@ class BarsTools:
                         break
 
                 except:
-                    msg = ("An error occurred while searching for the closest target reinforcement ratio {}\nThe result has been set to r:{}\tNs:{}\tAs{}".format(r, r_res, Ns_res, As_res))
+                    msg = ("An error occurred while searching for the closest target reinforcement ratio\n {}\nThe result has been set to r:{}\tNs:{}\tAs{},\n a difference of {}".format(r, r_res, Ns_res, As_res, r-r_res))
                     StandardLogger.warning(msg)
                     # raise Exception(msg)
                     break
@@ -758,7 +760,7 @@ class BarsTools:
 
     # * 计算钢筋分布
     @staticmethod
-    def HRectRebarDistr(Paras:HRectSectParas, attr:dict, r: float) -> tuple[float, list[int], list[ReBarArea]]:
+    def HRectRebarDistr(paras:HRectSectParas, attr:dict, r: float) -> tuple[float, list[int], list[ReBarArea]]:
         """
         :param Paras:桥墩截面截面参数对象
         :param attr: 桥墩截面参数对象
@@ -782,9 +784,9 @@ class BarsTools:
         #                 |l_l1
         if r - 0.006 < DEFVAL._TOL_ or r - 0.04 > DEFVAL._TOL_:
             raise Exception("Wrong Re-Bar Ratio")
-        w = Paras.W - Paras.C * 2
-        l = Paras.L - Paras.C * 2
-        t = Paras.T - Paras.C * 2
+        w = paras.W - paras.C * 2
+        l = paras.L - paras.C * 2
+        t = paras.T - paras.C * 2
 
         l_line = [w, l] * 2 + [w-2*t, l-2*t] * 2
         decOrder = [(5, 7), (4, 6), (1, 3), (0, 2)]
@@ -827,7 +829,7 @@ class BarsTools:
         return r, Res[1], Res[2]
         
     @staticmethod
-    def HRoundRebarDistr(Paras:HRoundSectParas, attr:dict, r:float) -> tuple[float, list[int], list[ReBarArea]]:
+    def HRoundRebarDistr(paras:BridgeParas.HRoundSectParas, attr:dict, r:float) -> tuple[float, list[int], list[ReBarArea]]:
         """
         :param Paras:桥墩截面截面参数对象
         :param attr: 桥墩截面参数对象
@@ -840,12 +842,12 @@ class BarsTools:
             raise Exception("Wrong Re-Bar Ratio")
 
         
-        c = Paras.C
-        Rout = Paras.Rout - c
-        Rin = Paras.Rout - Paras.T - c
+        c = paras.C
+        Rout = paras.Rout - c
+        Rin = paras.Rout - paras.T - c
         if c < 0 or Rout < 0 or Rin < 0:
             raise Exception('Wrong Params:{0}'.format([c, Rout, Rin]))
-        if Paras.T < DEFVAL._REBAR_D_DEF:
+        if paras.T < DEFVAL._REBAR_D_DEF:
             raise Exception('wrong params T too small')
         l_line = [Rout*2*np.pi, Rin*2*np.pi]
         area = attr["area"]
