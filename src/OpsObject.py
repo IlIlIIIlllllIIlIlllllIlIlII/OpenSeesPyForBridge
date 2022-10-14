@@ -25,6 +25,7 @@ class OpsNode(Comp.OpsObj):
         self._type += "->Ops Node"
 
         self._xyz = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
+        
 
     def _create(self):
         OpsCommandLogger.info('ops.node({}, *{})'.format(self._uniqNum, self._xyz))
@@ -276,7 +277,7 @@ class OpsPySimpleMaterial(OpsUniaxialMaterial):
         self._soilType = soilType
 
     def _create(self):
-        ops.uniaxialMaterial('PySimple1', self._uniqNum, self._soilType, self._pult, self._y50, self._cd, c=0.0)
+        ops.uniaxialMaterial('PySimple1', self._uniqNum, self._soilType, self._pult, self._y50, self._cd)
 
         OpsCommandLogger.info('ops.uniaxialMaterial("PySimple1", {}, {}, {}, {}, {}, c=0.0)'.format(self._uniqNum, self._soilType, self._pult, self._y50, self._cd))
 
@@ -294,7 +295,7 @@ class OpsTzSimpleMaterial(OpsUniaxialMaterial):
         self._soilType = soilType
 
     def _create(self):
-        ops.uniaxialMaterial('TzSimple1', self._uniqNum, self._soilType, self._tult, self._z50, c=0.0)
+        ops.uniaxialMaterial('TzSimple1', self._uniqNum, self._soilType, self._tult, self._z50)
         OpsCommandLogger.info('ops.uniaxialMaterial("PySimple1", {}, {}, {}, {}, c=0.0)'.format(self._uniqNum, self._soilType, self._tult, self._z50))
 
     @property
@@ -303,15 +304,15 @@ class OpsTzSimpleMaterial(OpsUniaxialMaterial):
 
 class OpsQzSimpleMaterial(OpsUniaxialMaterial):
     @Comp.CompMgr()
-    def __init__(self, qult:float, q50:float, SoilType:int=2, name=''):
+    def __init__(self, qult:float, q50:float, soilType:int=2, name=''):
         super().__init__(name)
         self._type += 'Ops P-y Material'
         self._qult = qult
         self._z50 = q50
-        self._qzType = SoilType
+        self._qzType = soilType
 
     def _create(self):
-        ops.uniaxialMaterial('QzSimple1', self._uniqNum, self._qzType, self._qult, self._z50, suction=0.0, c=0.0)
+        ops.uniaxialMaterial('QzSimple1', self._uniqNum, self._qzType, self._qult, self._z50)
         OpsCommandLogger.info('ops.uniaxialMaterial("PySimple1", {}, {}, {}, {}, suction=0.0, c=0.0)'.format(self._uniqNum, self._qzType, self._qult, self._z50))
 
     @property
@@ -854,6 +855,7 @@ class OpsZLElement(OpsLineElement):
         return [self._Node1, self._Node2, self._m, self._dirs]
 
     def _create(self):
+
         OpsCommandLogger.info('ops.element(\'{}\', {}, {}, {}, \'{}\', *{}, \'{}\', *{})'.format('zeroLength', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, '-mat', self._m, '-dir', self._dirs))
         ops.element('zeroLength', self._uniqNum, self._Node1.uniqNum, self._Node2.uniqNum, '-mat', *self._m, '-dir', *self._dirs)
 

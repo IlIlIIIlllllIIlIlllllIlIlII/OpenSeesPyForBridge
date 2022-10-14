@@ -162,9 +162,25 @@ class SeismicWave(Comp.Component):
             self._accZ = None
         
         self._times = [x*dt for x in range(maxlen)]
+        self._dt = dt
 
         self._OpsGroundMotions = self._OpsGroundMotionBuild()
-    
+    def CutWaveFromMaxVal(self, duraTime):
+        idx = self._accX.argmax() 
+        halfTIdx = duraTime/2/self._dt
+        if idx-halfTIdx >=0:
+            fp = int(idx-halfTIdx)
+        else:
+            fp = 0
+        if idx+halfTIdx >= self._accX.shape[1]:
+            lp = -1
+        else:
+            lp = int(idx+halfTIdx)
+        accX =  self._accX[0, fp:lp]
+        accY =  self._accY[0, fp:lp]
+        accZ =  self._accZ[0, fp:lp]
+        return SeismicWave(self._dt, accX, self._factors[0], accY, self._factors[1], accZ, self._factors[2], self._information)
+        
     def _OpsGroundMotionBuild(self):
         # accX = OpsObject.OpsPathTimeSerise(self._times, self._accX)
         # vel = OpsObject.OpsPathTimeSerise(self._times, self._accY)

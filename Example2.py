@@ -82,7 +82,7 @@ anaParams = DEF_ANA_PARAM.DefaultSeismicAnalysParam
 anaParams.setDeltaT(0.1)
 anaParams.setAlogrithm(AlgorithmEnum.NewtonLineSearch)
 anaParams.setTest(TestEnum.NormDispIncr, 1e-10)
-rst = AnalsisModel.RunSeismicAnalysis(rs_func, duraT=90, points=[p3])
+rst = AnalsisModel.RunSeismicAnalysis(rs_func, duraT=90, targets=[p3])
 # %%
 for key, comp in Comp.CompMgr._allUniqComp.items():
     if isinstance(comp, OpsNode):

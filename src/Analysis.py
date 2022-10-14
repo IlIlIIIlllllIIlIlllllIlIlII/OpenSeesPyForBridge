@@ -426,10 +426,14 @@ class AnalsisModel(Comp.Component):
                     flag2, node2 = cls.Inquire.FindNode(boundary._nodeJ.point)
 
                     if flag1 and flag2:
-                        ele = boundary._activate()
+                        boundary._activate()
                         # cls._SpecialElementList.append(ele)
                 elif isinstance(boundary, Boundary.BridgeSimplePileSoilBoundary) and not boundary._activated:
-                    ...
+                    flag1, node1 = cls.Inquire.FindNode(boundary._NodeI.point)
+                    flag2, node2 = cls.Inquire.FindNode(boundary._NodeJ.point)
+                    if flag1 and flag2:
+                        ele = boundary._activate()
+                        cls._SpecialElementList.append(ele)
                 elif isinstance(boundary, Boundary.BridgeFullPileSoilBoundary) and not boundary._activated:
                     msg = 'Unexpted BridgeFullPileSoilBoundary:{}, all this Boundary should be expanded to lower form boundary'.format(boundary._uniqNum)
                     StandardLogger.error(msg)
@@ -636,7 +640,16 @@ class AnalsisModel(Comp.Component):
 
         else:
             raise Exception("No gravity parameter is added")
-
+    
+    @classmethod
+    def GetNaturalFrequencies(cls, mode:int):
+        freq = []
+        x = ops.eigen(mode)
+        for l in x:
+            freq.append(l**0.5/2/np.pi)
+        
+        return freq
+            
 
     @classmethod
     def RunStaticAnalys(cls, analysParam:AnalysParams=DEF_ANA_PARAM.DefaultStaticAnalysParam, gravity=False, gravityAnaParams:AnalysParams=DEF_ANA_PARAM.DefaultGrivateAnalysParam):
@@ -680,7 +693,7 @@ class AnalsisModel(Comp.Component):
         return AnalsisModel.Rst('Static')
         
     @classmethod
-    def RunSeismicAnalysis(cls, res_func, duraT=0.0, points:list[tuple[float]]=None, analysParam:AnalysParams=DEF_ANA_PARAM.DefaultSeismicAnalysParam):
+    def RunSeismicAnalysis(cls, res_func, duraT=0.0, targets:list=None, analysParam:AnalysParams=DEF_ANA_PARAM.DefaultSeismicAnalysParam):
 
         OpsCommandLogger.info('ops.wipeAnalysis()')
         ops.wipeAnalysis()
@@ -747,9 +760,11 @@ class AnalsisModel(Comp.Component):
 
             res = []
             Norms = []
+
+            
             while(time < durT):
-                
                 OpsCommandLogger.info('ops.analyze(*{})'.format(analysParam.analyze))
+                
                 output = ops.analyze(*analysParam.analyze)
 
                 norms = ops.testNorm()
@@ -770,8 +785,8 @@ class AnalsisModel(Comp.Component):
                 times.append(time)
                 
                 nodes_res = []
-                if points:
-                    for p in points:
+                if targets:
+                    for p in targets:
                         n_res = res_func(p)
                     nodes_res.append(n_res)
                     
@@ -781,6 +796,7 @@ class AnalsisModel(Comp.Component):
                 nodes_res = np.array(nodes_res)
 
                 res.append(nodes_res)
+                # i += 1
             
             times = times[:-1]
             
@@ -790,7 +806,7 @@ class AnalsisModel(Comp.Component):
             cls._AnalsyFinshed = True
 
             plt.semilogy(Norms,'k-x')
-            return AnalsisModel.Rst(times, points, res, 'Seismic')
+            return AnalsisModel.Rst(times, targets, res, 'Seismic')
 
         else:
             raise Exception("No Seismic parameter is added")
