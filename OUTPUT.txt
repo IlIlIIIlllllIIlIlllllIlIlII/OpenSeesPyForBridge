@@ -1,0 +1,80 @@
+An error occurred while searching for the closest target reinforcement ratio
+ 0.01
+The result has been set to r:0.009792188249331032	Ns:[39, 8]	As[<ReBarArea.d25: 490.9>, <ReBarArea.d25: 490.9>],
+ a difference of 0.0002078117506689684
+An error occurred while searching for the closest target reinforcement ratio
+ 0.01
+The result has been set to r:0.009792188249331032	Ns:[39, 8]	As[<ReBarArea.d25: 490.9>, <ReBarArea.d25: 490.9>],
+ a difference of 0.0002078117506689684
+An error occurred while searching for the closest target reinforcement ratio
+ 0.01
+The result has been set to r:0.009792188249331032	Ns:[39, 8]	As[<ReBarArea.d25: 490.9>, <ReBarArea.d25: 490.9>],
+ a difference of 0.0002078117506689684
+An error occurred while searching for the closest target reinforcement ratio
+ 0.01
+The result has been set to r:0.009792188249331032	Ns:[39, 8]	As[<ReBarArea.d25: 490.9>, <ReBarArea.d25: 490.9>],
+ a difference of 0.0002078117506689684
+An error occurred while searching for the closest target reinforcement ratio
+ 0.01
+The result has been set to r:0.009792188249331032	Ns:[39, 8]	As[<ReBarArea.d25: 490.9>, <ReBarArea.d25: 490.9>],
+ a difference of 0.0002078117506689684
+An error occurred while searching for the closest target reinforcement ratio
+ 0.01
+The result has been set to r:0.009792188249331032	Ns:[39, 8]	As[<ReBarArea.d25: 490.9>, <ReBarArea.d25: 490.9>],
+ a difference of 0.0002078117506689684
+An error occurred while searching for the closest target reinforcement ratio
+ 0.01
+The result has been set to r:0.009792188249331032	Ns:[39, 8]	As[<ReBarArea.d25: 490.9>, <ReBarArea.d25: 490.9>],
+ a difference of 0.0002078117506689684
+An error occurred while searching for the closest target reinforcement ratio
+ 0.01
+The result has been set to r:0.009792188249331032	Ns:[39, 8]	As[<ReBarArea.d25: 490.9>, <ReBarArea.d25: 490.9>],
+ a difference of 0.0002078117506689684
+An error occurred while searching for the closest target reinforcement ratio
+ 0.01
+The result has been set to r:0.009792188249331032	Ns:[39, 8]	As[<ReBarArea.d25: 490.9>, <ReBarArea.d25: 490.9>],
+ a difference of 0.0002078117506689684
+An error occurred while searching for the closest target reinforcement ratio
+ 0.01
+The result has been set to r:0.009792188249331032	Ns:[39, 8]	As[<ReBarArea.d25: 490.9>, <ReBarArea.d25: 490.9>],
+ a difference of 0.0002078117506689684
+An error occurred while searching for the closest target reinforcement ratio
+ 0.006400696024265469
+The result has been set to r:0.0062503329251049145	Ns:[40]	As[<ReBarArea.d25: 490.9>],
+ a difference of 0.00015036309916055448
+An error occurred while searching for the closest target reinforcement ratio
+ 0.006400696024265469
+The result has been set to r:0.0062503329251049145	Ns:[40]	As[<ReBarArea.d25: 490.9>],
+ a difference of 0.00015036309916055448
+An error occurred while searching for the closest target reinforcement ratio
+ 0.006400696024265469
+The result has been set to r:0.0062503329251049145	Ns:[40]	As[<ReBarArea.d25: 490.9>],
+ a difference of 0.00015036309916055448
+An error occurred while searching for the closest target reinforcement ratio
+ 0.006400696024265469
+The result has been set to r:0.0062503329251049145	Ns:[40]	As[<ReBarArea.d25: 490.9>],
+ a difference of 0.00015036309916055448
+An error occurred while searching for the closest target reinforcement ratio
+ 0.006400696024265469
+The result has been set to r:0.0062503329251049145	Ns:[40]	As[<ReBarArea.d25: 490.9>],
+ a difference of 0.00015036309916055448
+An error occurred while searching for the closest target reinforcement ratio
+ 0.006400696024265469
+The result has been set to r:0.0062503329251049145	Ns:[40]	As[<ReBarArea.d25: 490.9>],
+ a difference of 0.00015036309916055448
+An error occurred while searching for the closest target reinforcement ratio
+ 0.006400696024265469
+The result has been set to r:0.0062503329251049145	Ns:[40]	As[<ReBarArea.d25: 490.9>],
+ a difference of 0.00015036309916055448
+An error occurred while searching for the closest target reinforcement ratio
+ 0.006400696024265469
+The result has been set to r:0.0062503329251049145	Ns:[40]	As[<ReBarArea.d25: 490.9>],
+ a difference of 0.00015036309916055448
+An error occurred while searching for the closest target reinforcement ratio
+ 0.006400696024265469
+The result has been set to r:0.0062503329251049145	Ns:[40]	As[<ReBarArea.d25: 490.9>],
+ a difference of 0.00015036309916055448
+An error occurred while searching for the closest target reinforcement ratio
+ 0.006400696024265469
+The result has been set to r:0.0062503329251049145	Ns:[40]	As[<ReBarArea.d25: 490.9>],
+ a difference of 0.00015036309916055448

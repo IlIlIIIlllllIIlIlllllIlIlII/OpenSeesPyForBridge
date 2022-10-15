@@ -6,6 +6,7 @@ from enum import Enum
 # from sys import flags
 # from tracemalloc import StatisticDiff
 from typing import overload
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -351,7 +352,7 @@ class AnalsisModel(Comp.Component):
             cls.StoreBoundary(nodeI, boundary)
             cls.StoreBoundary(nodeJ, boundary)
 
-        elif isinstance(boundary, Boundary.BridgeSimplePileSoilBoundary):
+        elif isinstance(boundary, Boundary.BridgePyTzQzBoundary):
             nodeI = boundary._NodeI
             nodeJ = boundary._NodeJ
             cls.StoreBoundary(nodeI, boundary)
@@ -366,6 +367,10 @@ class AnalsisModel(Comp.Component):
             nodeJ = boundary._nodeJ
             cls.StoreBoundary(nodeI, boundary)
             cls.StoreBoundary(nodeJ, boundary)
+        elif isinstance(boundary, Boundary.BridgeSimplyPileSoilBoundary):
+            segs = boundary._segs
+            for seg in segs:
+                cls.StoreBoundary(seg, boundary)
                 
 
         else:
@@ -389,13 +394,21 @@ class AnalsisModel(Comp.Component):
             for boundary in val:
                 if isinstance(boundary, Boundary.BridgeFullPileSoilBoundary) and not boundary._activated:
                     StandardLogger.info("Full PileSoil Boundary activated")
-                    x, y, z = boundary._activate()
+                    x, y, z, tempNode = boundary._activate()
                     cls._CuboidsList += boundary._SoilCuboids
                     ExpandBoudary += x
                     ExpandBoudary += y
                     ExpandBoudary += z
+                    cls._SpecialNodeList += tempNode
                     # for exboundary in (x+y+z):
                         # cls.AddBoundary(exboundary)
+                elif isinstance(boundary, Boundary.BridgeSimplyPileSoilBoundary) and not boundary._activated:
+                    StandardLogger.info("SimplyPileSoilBoundary activated")
+                    fixnode, pyqztz, fixboundary = boundary._activate()
+                    cls._SpecialNodeList.append(fixnode)
+                    ExpandBoudary += pyqztz
+                    ExpandBoudary += fixboundary
+
         # *Add Expand boundaries to the boundary dictionary
         for expB in ExpandBoudary:
             cls.AddBoundary(expB)
@@ -406,14 +419,14 @@ class AnalsisModel(Comp.Component):
         for key, val in cls._BoundaryDict.items():
             if not checkFunc(key, val):
                 raise Exception("failed to pass checkFunc")
-            
+            msg = 'can not find BridgeNode: {}'
             for boundary in val:
                 if isinstance(boundary, Boundary.BridgeFixedBoundary) and not boundary._activated:
                     flag, node = cls.Inquire.FindNode(boundary.FixedNode.point)
                     if flag:
                         boundary._activate()
                     else:
-                        raise Exception('can not find BridgeNode: {}'.format(boundary.FixedNode.point))
+                        raise Exception(msg.format(boundary.FixedNode.point))
                 elif isinstance(boundary, Boundary.BridgeBearingBoundary) and not boundary._activated:
                     flag1, node1 = cls.Inquire.FindNode(boundary._NodeI.point)
                     flag2, node2 = cls.Inquire.FindNode(boundary._NodeJ.point)
@@ -421,19 +434,25 @@ class AnalsisModel(Comp.Component):
                     if flag1 and flag2:
                         ele = boundary._activate()
                         cls._SpecialElementList.append(ele)
+                    else:
+                       raise Exception(msg.format(boundary._NodeI.point, boundary._NodeJ.point))
                 elif isinstance(boundary, Boundary.BridgeEQDOFSBoundary) and not boundary._activated:
                     flag1, node1 = cls.Inquire.FindNode(boundary._nodeI.point)
                     flag2, node2 = cls.Inquire.FindNode(boundary._nodeJ.point)
 
-                    if flag1 and flag2:
-                        boundary._activate()
+                    # if flag1 and flag2:
+                    boundary._activate()
+                    # else:
+                    #     raise Exception(msg.format(boundary._nodeI.point, boundary._nodeJ.point))
                         # cls._SpecialElementList.append(ele)
-                elif isinstance(boundary, Boundary.BridgeSimplePileSoilBoundary) and not boundary._activated:
+                elif isinstance(boundary, Boundary.BridgePyTzQzBoundary) and not boundary._activated:
                     flag1, node1 = cls.Inquire.FindNode(boundary._NodeI.point)
                     flag2, node2 = cls.Inquire.FindNode(boundary._NodeJ.point)
                     if flag1 and flag2:
                         ele = boundary._activate()
                         cls._SpecialElementList.append(ele)
+                    else:
+                        raise Exception(msg.format(boundary._NodeI.point, boundary._NodeJ.point))
                 elif isinstance(boundary, Boundary.BridgeFullPileSoilBoundary) and not boundary._activated:
                     msg = 'Unexpted BridgeFullPileSoilBoundary:{}, all this Boundary should be expanded to lower form boundary'.format(boundary._uniqNum)
                     StandardLogger.error(msg)
@@ -767,21 +786,23 @@ class AnalsisModel(Comp.Component):
                 
                 output = ops.analyze(*analysParam.analyze)
 
-                norms = ops.testNorm()
-                iters = ops.testIter()
+                # norms = ops.testNorm()
+                # iters = ops.testIter()
 
-                for j in range(iters):
-                    Norms.append(norms[j])
+                # for j in range(iters):
+                #     Norms.append(norms[j])
 
                 if output != 0:
                     mess = "Opensees Analyze failed, return code: {}".format(output)
                     print(mess)
-                    plt.semilogy(Norms,'k-x')
+                    # plt.semilogy(Norms,'k-x')
                     
                     raise Exception(mess)
 
                 OpsCommandLogger.info('ops.getTime()'.format())
                 time = ops.getTime()
+                # print('{}/{}'.format(time,duraT))
+                # sys.stdout.flush()
                 times.append(time)
                 
                 nodes_res = []
@@ -805,7 +826,7 @@ class AnalsisModel(Comp.Component):
 
             cls._AnalsyFinshed = True
 
-            plt.semilogy(Norms,'k-x')
+            # plt.semilogy(Norms,'k-x')
             return AnalsisModel.Rst(times, targets, res, 'Seismic')
 
         else:

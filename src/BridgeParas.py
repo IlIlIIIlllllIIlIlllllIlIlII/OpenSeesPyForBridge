@@ -517,7 +517,7 @@ class SoilParas(Paras):
 
 @dataclass
 class SandParas(SoilParas):
-    sandType:str
+    soilType:str
     nd:int
     rho:float 
     refShearModul:float 
@@ -537,7 +537,7 @@ class SandParas(SoilParas):
 
 @dataclass
 class ClayParas:
-    clayType:str
+    soilType:str
     nd:int
     rho:float
     refShearModul:float
@@ -605,38 +605,38 @@ class Clay:
     @classmethod
     @property
     def Soft(cls):
-        return ClayParas(clayType='SoftClay', **GlobalData.MaterialDataBase.Clay(GlobalData.ClayType.SoftClay))
+        return ClayParas(soilType='SoftClay', **GlobalData.MaterialDataBase.Clay(GlobalData.ClayType.SoftClay))
 
     @classmethod
     @property
     def Medium(cls):
-        return ClayParas(clayType='MediumClay', **GlobalData.MaterialDataBase.Clay(GlobalData.ClayType.MediumClay))
+        return ClayParas(soilType='MediumClay', **GlobalData.MaterialDataBase.Clay(GlobalData.ClayType.MediumClay))
 
     @classmethod
     @property
     def Stiff(cls):
-        return ClayParas(clayType='StiffClay', **GlobalData.MaterialDataBase.Clay(GlobalData.ClayType.StiffClay))
+        return ClayParas(soilType='StiffClay', **GlobalData.MaterialDataBase.Clay(GlobalData.ClayType.StiffClay))
 
 class Sand:
     @classmethod
     @property
     def LooseSand(cls):
-        return SandParas(sandType='LooseSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.LooseSand))
+        return SandParas(soilType='LooseSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.LooseSand))
 
     @classmethod
     @property
     def MediumSand(cls):
-        return SandParas(sandType='MediumSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.MediumSand))
+        return SandParas(soilType='MediumSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.MediumSand))
 
     @classmethod
     @property
     def MediumDenseSand(cls):
-        return SandParas(sandType='MediumDenseSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.MediumDenseSand))
+        return SandParas(soilType='MediumDenseSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.MediumDenseSand))
 
     @classmethod
     @property
     def DenseSand(cls):
-        return SandParas(sandType='DenseSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.DenseSand))
+        return SandParas(soilType='DenseSand', **GlobalData.MaterialDataBase.Sand(GlobalData.SandType.DenseSand))
 
 #TODO
 # class BridgeParas(Paras):

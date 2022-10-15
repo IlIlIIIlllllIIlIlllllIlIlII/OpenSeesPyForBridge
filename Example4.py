@@ -1,4 +1,7 @@
 #%%
+"""
+soil Cuboid test
+"""
 import openseespy.opensees as ops
 
 from src import *
@@ -20,8 +23,8 @@ if flag:
 AnalsisModel.AddCuboid(cub)
 AnalsisModel.buildFEM()
 
-dsp = ModelDisplayer()
-dsp.PlotModel(AnalsisModel)
+# dsp = ModelDisplayer()
+# dsp.PlotModel(AnalsisModel)
 # %%
 def rs_func(p:tuple[float]):
 
@@ -32,4 +35,5 @@ def rs_func(p:tuple[float]):
          Norms.append(norms[j])
     return Norms
 AnalsisModel.RunGravityAnalys(rs_func, (0, 0, 0))
+freqs = AnalsisModel.GetNaturalFrequencies(1)
 # %%

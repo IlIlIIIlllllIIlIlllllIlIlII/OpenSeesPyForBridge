@@ -20,10 +20,11 @@ mass = ConvertToBaseUnit(10, 'kg')
 p1 = (0., 0., 0.)
 p2 = (0., 0., H)
 p3 = (0., 0., -H)
-eleNum = 1
+eleNum = 5
 totL = UtilTools.PointsTools.PointsDist(p1, p2)
 eleL = UtilTools.SegmentTools.BuildWithSettedNum(totL, eleNum)
 paras = HRoundSectParas(R, 0.5*R)
+
 PierSeg = LineHRoundSeg(p1, p2, paras, paras, LineHRoundSeg.SupportedElementType.ElasticBeamColumnElement, con, con, rebar, eleL, [0.02]*eleNum, localZ=(-1, 0, 0) )
 
 AnalsisModel.AddSegment(PierSeg)
@@ -33,28 +34,27 @@ if flag:
     Node2.addMass(mass)
 fixed = False
 
-if not fixed:
-    totL = UtilTools.PointsTools.PointsDist(p3, p1)
-    eleL = UtilTools.SegmentTools.BuildWithSettedNum(totL, eleNum)
-    paras = SRoundSectParas(R)
-    PileSeg = LineSRoundSeg(p1, p3, paras, paras, LineSRoundSeg.SupportedElementType.ElasticBeamColumnElement, con, con, rebar, eleL, [0.02]*eleNum, localZ=(-1, 0, 0))
-    AnalsisModel.AddSegment(PileSeg)
+totL = UtilTools.PointsTools.PointsDist(p3, p1)
+eleL = UtilTools.SegmentTools.BuildWithSettedNum(totL, eleNum)
+paras = SRoundSectParas(R)
+PileSeg = LineSRoundSeg(p1, p3, paras, paras, LineSRoundSeg.SupportedElementType.ElasticBeamColumnElement, con, con, rebar, eleL, [0.02]*eleNum, localZ=(-1, 0, 0))
+AnalsisModel.AddSegment(PileSeg)
 
-    flag, node = AnalsisModel.Inquire.FindNode(p3)
-    if flag:
-        print("fix")
-        AnalsisModel.AddBoundary(BridgeFixedBoundary(node, [1]*6))
+flag, node = AnalsisModel.Inquire.FindNode(p3)
+if flag:
+    print("fix")
+    AnalsisModel.AddBoundary(BridgeFixedBoundary(node, [1]*6))
 
-    D = PileSeg._Secti.R * 2
-    eleW = eleL = [D, D, 2*D, 2*D]
-    eleH = [5*D, 5*D]
-    PSSI = BridgeFullPileSoilBoundary([PileSeg], sand, eleW, eleL, eleH)
-    AnalsisModel.AddBoundary(PSSI)
-else:
-    flag, node = AnalsisModel.Inquire.FindNode(p1)
-    if flag:
-        print('fix')
-        AnalsisModel.AddBoundary(BridgeFixedBoundary(node, [1]*6))
+D = PileSeg._Secti.R * 2
+eleW = eleL = [D]
+eleH = [D]
+PSSI = BridgeFullPileSoilBoundary([PileSeg], None, sand, eleW, eleL, eleH)
+AnalsisModel.AddBoundary(PSSI)
+# else:
+#     flag, node = AnalsisModel.Inquire.FindNode(p1)
+#     if flag:
+#         print('fix')
+#         AnalsisModel.AddBoundary(BridgeFixedBoundary(node, [1]*6))
 #%%
 AnalsisModel.buildFEM()
 
@@ -67,6 +67,7 @@ def rs_func(ntag):
 rst = AnalsisModel.RunGravityAnalys(rs_func, [Node2.OpsNode._uniqNum])
 # opsv.plot_defo()
 freqs = AnalsisModel.GetNaturalFrequencies(5)
+print(freqs)
 #%%
 waveE, info = Load.SeismicWave.LoadACCFromPEERFile(r'D:\Spectrum Response\AT\RSN1562_CHICHI_TTN006-E')
 waveN, info = Load.SeismicWave.LoadACCFromPEERFile(r'D:\Spectrum Response\AT\RSN1562_CHICHI_TTN006-N')

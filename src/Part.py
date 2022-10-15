@@ -15,12 +15,12 @@ from .log import *
 class BridgeNode(Comp.Parts):
     __slots__ = ['_type', '_uniqNum', '_name', '_point', '_mass', '_OpsNode', '_OpsMass']
     @Comp.CompMgr()
-    def __init__(self, x:float, y:float, z:float, mass:float=0.0, name="") -> None:
+    def __init__(self, x:float, y:float, z:float, mass:float=0.0, dofType=Comp.DimensionAndNumberEnum.BeamColunm, name="") -> None:
         super(Comp.Parts, self).__init__(name)
         self._type += "->BridgeNode"
         self._point = (x, y, z)
         self._mass = mass
-        self._OpsNode:OpsObject.OpsNode = OpsObject.OpsNode(self._point)
+        self._OpsNode:OpsObject.OpsNode = OpsObject.OpsNode(self._point, dofType)
         self._OpsMassList = []
 
         if mass - 0.0 >= abs(GlobalData.DEFVAL._TOL_):
@@ -1707,7 +1707,7 @@ class SoilCuboid(Cuboid):
         # x_points = UtilTools.PointsTools.LinePointBuilder(self._Node3.point, self._Node4.point, self._eleLensX)
         # y_points = UtilTools.PointsTools.LinePointBuilder(self._Node3.point, self._Node2.point, self._eleLensY)
         # z_points = UtilTools.PointsTools.LinePointBuilder(self._Node3.point, self._Node7.point, self._eleLensZ)
-        Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.Brick)
+        # Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.Brick)
         numNode_L = len(self._eleLensL) + 1
         numNode_Y = len(self._eleLensW) + 1
         numNode_Z = len(self._eleLensH) + 1
@@ -1731,7 +1731,7 @@ class SoilCuboid(Cuboid):
                 l = UtilTools.PointsTools.LinePointBuilder(y1, y2, self._eleLensL)
                 for i, p in enumerate(l):
                     np_P[i,j,k] = [p[0], p[1], p[2]]
-                    np_N[i,j,k] = BridgeNode(p[0], p[1], p[2])
+                    np_N[i,j,k] = BridgeNode(p[0], p[1], p[2], dofType=Comp.DimensionAndNumberEnum.Brick)
 
         if type(self._MaterialParas) == BridgeParas.ClayParas:
             m = OpsObject.OpsClayMaterial(*self._MaterialParas.val)
@@ -1767,20 +1767,20 @@ class SoilCuboid(Cuboid):
                     mass = m._rho * d[0]*d[1]*d[2] / 8
 
                     np_mass[i1] = np_mass[i2] = np_mass[i3] = np_mass[i4] = np_mass[i5] = np_mass[i6] = np_mass[i7] = np_mass[i8] = mass
-                    n1.addMass(mass)
-                    n2.addMass(mass)
-                    n3.addMass(mass)
-                    n4.addMass(mass)
-                    n5.addMass(mass)
-                    n6.addMass(mass)
-                    n7.addMass(mass)
-                    n8.addMass(mass)
+                    # n1.addMass(mass)
+                    # n2.addMass(mass)
+                    # n3.addMass(mass)
+                    # n4.addMass(mass)
+                    # n5.addMass(mass)
+                    # n6.addMass(mass)
+                    # n7.addMass(mass)
+                    # n8.addMass(mass)
 
                     np_E[i, j, k] = OpsObject.OpsStanderBrickElement(n1.OpsNode, n2.OpsNode, n3.OpsNode, n4.OpsNode, n5.OpsNode, n6.OpsNode, n7.OpsNode, n8.OpsNode, m)
         # x_index = [x[0] for x in x_points]
         # y_index = [x[1] for x in y_points]
         # z_index = [x[2] for x in z_points]
-        Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.BeamColunm)
+        # Comp.CompMgr.NdmNdfSwitcher(Comp.DimensionAndNumberEnum.BeamColunm)
         return np_P, np_N, np_mass, np_E 
 
     @classmethod

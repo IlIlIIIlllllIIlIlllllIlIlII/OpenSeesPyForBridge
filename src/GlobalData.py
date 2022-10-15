@@ -282,20 +282,20 @@ class MaterialDataBase:
                 0
             ]
 
-            return {
-                'nd':nd,
-                'rho':rho,
-                'refShearModul':refShearModul,
-                'refBulkModul':refBulkModul,
-                'frictionAng':frictionAng,
-                'peakShearStra':peakShearStra,
-                'refPress':refPress,
-                'pressDependCoe':pressDependCoe,
-                'PTAng':PTAng,
-                'contrac':contrac,
-                'dilat':dilat,
-                'liquefac':liquefac
-            }
+        return {
+            'nd':nd,
+            'rho':rho,
+            'refShearModul':refShearModul,
+            'refBulkModul':refBulkModul,
+            'frictionAng':frictionAng,
+            'peakShearStra':peakShearStra,
+            'refPress':refPress,
+            'pressDependCoe':pressDependCoe,
+            'PTAng':PTAng,
+            'contrac':contrac,
+            'dilat':dilat,
+            'liquefac':liquefac
+        }
 
     @classmethod
     def Clay(cls, clayType:ClayType):
@@ -313,7 +313,7 @@ class MaterialDataBase:
             refBulkModul = Unit.ConvertToBaseUnit(3.0e5, 'kpa')
             cohesi = Unit.ConvertToBaseUnit(37, 'kpa')
             peakShearStra = 0.1
-        if clayType is ClayType.SoftClay:
+        if clayType is ClayType.StiffClay:
             rho = Unit.ConvertToBaseUnit(1.8, 't/m/m/m')
             refShearModul = Unit.ConvertToBaseUnit(1.5e5, 'kpa')
             refBulkModul = Unit.ConvertToBaseUnit(7.5e4, 'kpa')

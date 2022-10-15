@@ -12,7 +12,7 @@ from src.log import StandardLogger
 from . import Part, UtilTools
 from .Analysis import AnalsisModel
 from .Boundary import (BridgeBearingBoundary, BridgeEQDOFSBoundary,
-                       BridgeFixedBoundary)
+                       BridgeFixedBoundary, BridgePyTzQzBoundary)
 from .Comp import Boundary, OpsObj
 
 #%%
@@ -31,6 +31,7 @@ class DisplayProf:
         FIX = 'FIX'
         BEAR = 'BEAR'
         EQDOF = 'EQDOF'
+        PYQZTZ = 'PYQZTZ'
 
     # class DEFAUT_DISP:
     DefaultPointColor = 'b'
@@ -279,6 +280,9 @@ class ModelDisplayer:
             self.Plot3DPoint(p1, marker=mker['BEAR'], c=color)
             self.Plot3DPoint(p2, marker=mker['BEAR'], c=color)
             self.Plot3DLine(p1, p2, lineStyle=':')
+        elif DisplayProf.BoundaryPlotMode.PYQZTZ in plotMode and isinstance(boundary, BridgePyTzQzBoundary):
+            # p1 = boundary._
+            ...
         else:
             ...
 

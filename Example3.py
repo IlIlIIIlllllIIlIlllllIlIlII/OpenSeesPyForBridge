@@ -18,7 +18,7 @@ R = ConvertToBaseUnit(1, 'm')
 p1 = (0., 0., 0.)
 p2 = (0., 0., H)
 p3 = (0., 0., -H)
-eleNum = 1
+eleNum = 3
 totL = UtilTools.PointsTools.PointsDist(p1, p2)
 eleL = UtilTools.SegmentTools.BuildWithSettedNum(totL, eleNum)
 paras = HRoundSectParas(R, 0.5*R)
@@ -36,18 +36,21 @@ AnalsisModel.AddSegment(PileSeg)
 flag, node = AnalsisModel.Inquire.FindNode(p3)
 if flag:
     print("fix")
-    AnalsisModel.AddBoundary(BridgeFixedBoundary(node, [1]*6))
+    # AnalsisModel.AddBoundary(BridgeFixedBoundary(node, [1]*6))
 D = PileSeg._Secti.R * 2
 eleW = eleL = [D, D, 2*D, 2*D]
 eleH = [5*D, 5*D]
-PSSI = BridgeFullPileSoilBoundary([PileSeg], sand, eleW, eleL, eleH)
-AnalsisModel.AddBoundary(PSSI)
+# PSSI = BridgeFullPileSoilBoundary([PileSeg], sand, eleW, eleL, eleH)
+# AnalsisModel.AddBoundary(PSSI)
+
+SSI = BridgeSimplyPileSoilBoundary([PileSeg], sand)
+AnalsisModel.AddBoundary(SSI)
 
 AnalsisModel.buildFEM()
 
 #%%
-dsp = ModelDisplayer()
-dsp.PlotModel(AnalsisModel)
+# dsp = ModelDisplayer()
+# dsp.PlotModel(AnalsisModel)
 # opsv.plot_model()
 
 #%%
@@ -63,6 +66,7 @@ def rs_func(p:tuple[float]):
          Norms.append(norms[j])
     return Norms
 AnalsisModel.RunGravityAnalys(rs_func, p1)
+freqs = AnalsisModel.GetNaturalFrequencies(5)
 opsv.plot_defo()
 
 #%%

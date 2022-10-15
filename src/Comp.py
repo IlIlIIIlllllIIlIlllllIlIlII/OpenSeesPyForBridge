@@ -71,11 +71,11 @@ class CompMgr:
     def NdmNdfSwitcher(cls, NdmNdf):
         if cls._NdmNdf == NdmNdf:
             pass
-        elif NdmNdf == DimensionAndNumberEnum.BeamColunm:
+        elif NdmNdf is DimensionAndNumberEnum.BeamColunm:
             OpsCommandLogger.info('ops.model(\'{}\', \'{}\', {}, \'{}\', {})'.format("basic", "-ndm", 3, "-ndf", 6))
             ops.model('basic', '-ndm', 3, '-ndf', 6)
             cls._NdmNdf = NdmNdf
-        elif NdmNdf == DimensionAndNumberEnum.Brick:
+        elif NdmNdf is DimensionAndNumberEnum.Brick:
             OpsCommandLogger.info('ops.model(\'{}\', \'{}\', {}, \'{}\', {})'.format("basic", "-ndm", 3, "-ndf", 3))
             ops.model('basic', '-ndm', 3, '-ndf', 3)
             cls._NdmNdf = NdmNdf

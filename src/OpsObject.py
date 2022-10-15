@@ -2,7 +2,6 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from sys import flags
 
 import numpy as np
 import openseespy.opensees as ops
@@ -19,15 +18,17 @@ from .log import *
 class OpsNode(Comp.OpsObj):
     # __slots__ = ["_type", "_uniqNum", "_name", "_xyz"]
     @Comp.CompMgr()
-    def __init__(self, xyz: tuple, name=""):
+    def __init__(self, xyz: tuple, dofType:Comp.DimensionAndNumberEnum=Comp.DimensionAndNumberEnum.BeamColunm,name=""):
         super(OpsNode, self).__init__(name)
         # self = self._VALCOMPLETE(xyz)
         self._type += "->Ops Node"
 
         self._xyz = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
+        self._dofType = dofType
         
 
     def _create(self):
+        Comp.CompMgr.NdmNdfSwitcher(self._dofType)
         OpsCommandLogger.info('ops.node({}, *{})'.format(self._uniqNum, self._xyz))
         ops.node(self._uniqNum, *self._xyz)
     # @Comp.CompMgr()
@@ -60,7 +61,7 @@ class OpsMass(Comp.OpsObj):
         self._create()
     
     def _create(self):
-        OpsCommandLogger.info('ops.mass({}, {}, {})'.format(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2]))
+        OpsCommandLogger.info('ops.mass({}, {}, {}, {})'.format(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2]))
 
         ops.mass(self._Node.uniqNum, self._mass*self._massDof[0], self._mass*self._massDof[1], self._mass*self._massDof[2])
 
@@ -1079,8 +1080,9 @@ class OpsNodeLoad(OpsPlainLoads):
     def __init__(self, load:tuple[float], node:OpsNode, name=""):
         super().__init__(name)
         self._type += '->OpsNodeLoad'
-        self._Load = load
         self._Node = node
+        if self._Node._dofType == Comp.DimensionAndNumberEnum.Brick:
+            self._Load = load[:3]
         self._create()
     
     def _create(self):
